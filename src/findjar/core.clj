@@ -6,8 +6,8 @@
             [pandect.algo.md5 :refer [md5]]
             [pandect.algo.crc32 :refer [crc32*]])
   (:gen-class)
-  (:import (java.io File FileOutputStream)
-           (java.util.zip ZipFile ZipEntry ZipOutputStream)
+  (:import (java.io File)
+           (java.util.zip ZipFile ZipEntry)
            (java.util.regex Pattern)))
 
 (defn valid-file? [^File f opts]
