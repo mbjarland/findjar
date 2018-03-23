@@ -120,6 +120,7 @@
     (let [reader (jio/reader stream)]
       (some (fn [line] (re-find pattern line)) (line-seq reader)))))
 
+;; TODO: Match on paths - implement path and apath in the cond below
 (defn print-stream-matches [opts file-name display-name stream-factory]
   (let [{:keys [name grep path apath cat md5 sha1]} opts
         macro-op (or cat md5 sha1)]
