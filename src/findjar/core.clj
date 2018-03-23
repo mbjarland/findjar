@@ -31,9 +31,9 @@
     (if of
       (do
         (with-open [w (jio/writer of :append true)]
-          (.write w (str ">>> " display-name \newline))
+          (.write w (str "<<<<<<< " display-name \newline))
           (jio/copy (stream-factory) w)
-          (.write w (str \newline)))
+          (.write w (str ">>>>>>>" \newline)))
         (println display-name ">>" (.getPath of)))
       (with-open [stream (stream-factory)
                   reader (jio/reader stream)]
