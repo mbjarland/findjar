@@ -131,6 +131,8 @@
       (:help options) {:exit-message (usage summary) :ok? true} ; help => exit OK with usage summary
       (and (:out-file options)
            (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
+      (and (:apath options)
+           (:path options)) (fail "can not use path (-p) and apath (-a) together")
       errors {:exit-message (error-msg errors summary)}     ; errors => exit with description of errors
       (valid-search-root? arguments) {:search-root (file (first arguments))
                                       :opts        options}

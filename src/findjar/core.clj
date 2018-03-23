@@ -37,11 +37,11 @@
         (println display-name ">>" (.getPath of)))
       (with-open [stream (stream-factory)
                   reader (jio/reader stream)]
-        (println ">>>" display-name)
+        (println "<<<<<<<" display-name)
         (let [s (line-seq reader)]
           (doseq [[n line] (map-indexed vector s)]
             (println (inc n) (str/trim line))))
-        (println)))))
+        (println ">>>>>>>")))))
 
 (defn md5-stream [stream-factory display-name]
   (with-open [stream (stream-factory)]
@@ -125,7 +125,9 @@
   (let [{:keys [name grep path apath cat md5 sha1]} opts
         macro-op (or cat md5 sha1)]
     (cond
-      (and name (not (re-find name display-name))) nil
+      (and apath (not (re-find apath display-name))) nil    ; no apath match
+      (and path (not (re-find path display-name))) nil      ; no path match
+      (and name (not (re-find name file-name))) nil
       (not (or macro-op grep)) (println display-name)
       (and grep macro-op (not (stream-line-matches? stream-factory grep))) nil
       md5 (md5-stream stream-factory display-name)
@@ -133,12 +135,15 @@
       cat (dump-stream stream-factory display-name opts)
       grep (grep-stream stream-factory display-name opts))))
 
+; TODO: make this a multi-method to enables more file formats
+; TODO: make -type accept a set to support "-t fjg" for files, jar files, gzip files etc
 (defn find-in-jar [^File f display-name opts]
   (try
     (with-open [^ZipFile zip (ZipFile. f)]
       (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
-        (let [entry-name     (.getName entry)
-              display-name   (str (str/trim display-name) "@" (str/trim entry-name))
+        (let [entry-path     (.getName entry)
+              entry-name     (.getName (jio/file entry-path))
+              display-name   (str (str/trim display-name) "@" (str/trim entry-path))
               stream-factory #(.getInputStream zip entry)]
           (print-stream-matches opts entry-name display-name stream-factory))))
     (catch Exception e
@@ -150,7 +155,7 @@
     (let [display-name (if (:apath opts) (.getCanonicalPath f)
                                          (relative-path root f))
           file-name    (.getName f)]
-      (if (-> file-name (.endsWith ".jar"))
+      (if (some  #(.endsWith file-name %) [".jar" ".zip"])
         (find-in-jar f display-name opts)
         (let [stream-factory #(jio/input-stream f)]
           (print-stream-matches opts file-name display-name stream-factory))))))
