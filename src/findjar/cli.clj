@@ -75,7 +75,7 @@
          :parse-fn #(clojure.java.io/as-file %)]
         ["-f" "--flags <flags>"
          "turns on regex flags for all matches used. Example: -f i turns on case insensitive matching for both file names and content. See oracle javadocs on
-          Pattern.html#special for details on java regex flags."]
+          Pattern.html#special for details on java regex flags"]
         ["-c" "--cat" "cat file. For matching files, print the entire file contents on the console"]
         ["-m" "--md5" "print md5 hash of matched files"]
         ["-s" "--sha1" "print sha1 hash of matched files"]
