@@ -10,23 +10,49 @@
            (java.util.zip ZipFile ZipEntry)
            (java.util.regex Pattern)))
 
+(defprotocol FindJarHandler
+  (warn [file type msg opts])
+  (match [display-name])
+  (grep-match [display-name line-nr hit? line opts])
+  (dump-stream [display-name stream-factory opts])
+  (hash [display-name stream-factory hashes opts]))
+
+
 (comment
   (def output-handlers
     {:warning     (fn [file type msg opts])
      :match       (fn [display-name])
      :grep-match  (fn [display-name line-nr hit? line opts])
      :dump-stream (fn [display-name stream-factory opts])
-     :hash        (fn [display-name type hash])
+     :hash        (fn [display-name stream-factory hashes opts])
      })
-
   )
-(defn valid-file? [^File f opts]                            ;;TODO: use multimethod file type
-  (let [valid-type (if (-> f .getName (.endsWith ".jar")) \j \f)
-        type       (:type opts)]
+
+(defn file-ext [^File f]
+  (let [p (.getCanonicalPath f)
+        i (.lastIndexOf p ".")]
+    (if (and (pos? i) (not (= (inc i) (count p))))
+      (subs p (inc i))
+      nil)))
+
+(comment
+  (valid-file?
+    (jio/file "findjar.jar")
+    {:active-file-types {"jar" {:key \k :value \v}
+                         "clj" {:key \c :value \v}}}
+    {:warning (fn [f type msg opts]
+                (println msg))}))
+
+(defn valid-file? [^File f opts handlers]                   ;;TODO: use multimethod file type
+  (let [active-types (:active-file-types opts)
+        ext          (.toLowerCase (file-ext f))
+        warn-handler (:warning handlers)]
     (and
       (.isFile f)
-      (if (.canRead f) true (println "WARN: can not read file -" (.getPath f)))
-      (or (not type) (= type valid-type)))))
+      (if (.canRead f) true (warn-handler f :can-not-read
+                                          "WARN: can not read file"
+                                          opts))
+      (get active-types ext))))
 
 (defn relative-path [^File search-root ^File f]
   (subs
@@ -131,30 +157,25 @@
       (some (fn [line] (re-find pattern line)) (line-seq reader)))))
 
 ;; TODO: Match on paths - implement path and apath in the cond below
-(defn print-stream-matches [opts file-name display-name stream-factory]
-  (let [{:keys [name grep path apath cat md5 sha1]} opts
+(defn print-stream-matches [opts file-name display-name stream-factory handlers]
+  (let [{:keys [name grep path apath cat hashes]} opts
         macro-op (or cat md5 sha1)]
     (cond
       (and apath (not (re-find apath display-name))) nil    ; no apath match
       (and path (not (re-find path display-name))) nil      ; no path match
-      (and name (not (re-find name file-name))) nil
-      (not (or macro-op grep)) (println display-name)
-      (and grep macro-op (not (stream-line-matches? stream-factory grep))) nil
-      md5 (md5-stream stream-factory display-name)
+      (and name (not (re-find name file-name))) nil         ; no name match
+      (not (or macro-op grep)) ((:match handlers) display-name) ; normal non-grep match
+      (and grep macro-op (not (stream-line-matches? stream-factory grep))) nil ;grep+macro and no matches -> nil
+      hashes ((:hash handlers) hashes stream-factory display-name opts)
+      md5 (md5-stream stream-factory display-name) ((:hash handlers) display-name :md5) ;;TODO!!!!
       sha1 (sha1-stream stream-factory display-name)
       cat (dump-stream stream-factory display-name opts)
       grep (grep-stream stream-factory display-name opts))))
 
-(defn file-ext [^File f]
-  (let [p (.getCanonicalPath f)
-        i (.lastIndexOf p ".")]
-    (if (pos? i)
-      (subs p i)
-      nil)))
 
 ; TODO: make this a multi-method to enables more file formats
 ; TODO: make -type accept a set to support "-t fjg" for files, jar files, gzip files etc
-(defn find-in-jar [^File f display-name opts]
+(defn find-in-jar [^File f display-name opts handlers]
   (try
     (with-open [^ZipFile zip (ZipFile. f)]
       (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
@@ -162,65 +183,76 @@
               entry-name     (.getName (jio/file entry-path))
               display-name   (str (str/trim display-name) "@" (str/trim entry-path))
               stream-factory #(.getInputStream zip entry)]
-          (print-stream-matches opts entry-name display-name stream-factory))))
+          (print-stream-matches opts entry-name display-name stream-factory handlers))))
     (catch Exception e
-      (println "error opening" (.getPath f) ", error:" (.getMessage e))
-      (throw e))))
+      ((:warning handlers) f :error-opening (str "error opening " (.getPath f) ", error:" (.getMessage e)) opts))))
 
 ;; extensible file type handlers
 (defmulti cli-file-type identity)
-(defmethod cli-file-type "jar" [_]
-  {:type-char         \j
+(defmethod cli-file-type \j [_]
+  {:ext               "jar"
    :desc              "jar files"
    :search-by-default true})
 
-(defmethod cli-file-type "zip" [_]
-  {:type-char         \z
+(defmethod cli-file-type \z [_]
+  {:ext               "zip"
    :desc              "zip files"
    :search-by-default false})
 
-(defmethod cli-file-type :default [_]
-  {:type-char         \d
+(defmethod cli-file-type \d [_]
+  {:ext               nil
    :desc              "disk files"
    :search-by-default true})
 
-(defmulti find-in-file-type
-          "todo: implement
-          [if file type specified
-            then use only the specified file types
-            else use search-by-default file types
-            this will come in as a list of :active-filetypes
-            in opts"
-          (fn [^File f display-name opts] (file-ext f)))
+(defmulti find-in-file-type (fn [^File f _ _ _] (file-ext f)))
 
-(defmethod find-in-file-type "jar" [^File f display-name opts]
-  (find-in-jar f display-name opts))
+(defmethod find-in-file-type "jar" [^File f display-name opts handlers]
+  (find-in-jar f display-name opts handlers))
 
-(defmethod find-in-file-type "zip" [^File f display-name opts]
-  (find-in-jar f display-name opts))
+(defmethod find-in-file-type "zip" [^File f display-name opts handlers]
+  (find-in-jar f display-name opts handlers))
 
-(defmethod find-in-file-type :default [^File f display-name opts]
+(defmethod find-in-file-type :default [^File f display-name opts handlers]
   (let [file-name      (.getName f)
         stream-factory #(jio/input-stream f)]
-    (print-stream-matches opts file-name display-name stream-factory)))
+    (print-stream-matches opts file-name display-name stream-factory handlers)))
 
 ;; extensible file hashing
-(defmulti cli-hash-type identity)
-(defmethod cli-hash-type :md5 [type]
-  {:type-char \m
-   :desc      "md5 hash"})
-(defmethod cli-hash-type :sha1 [type]
-  {:type-char \s
-   :desc      "sha1 hash"})
+(defmulti cli-hash-type (fn [cli-type-char] cli-type-char))
+(defmethod cli-hash-type \m [_]
+  {:id   :md5
+   :desc "md5 hash"})
+(defmethod cli-hash-type \s [_]
+  {:id   :sha1
+   :desc "sha1 hash"})
+
+
+(defn calculate-pandect-hash
+  "internal function to calculate pandect hashes"
+  [type pandect-fn display-name stream-factory handlers]
+  (let [hash (with-open [stream (stream-factory)]
+               (pandect-fn stream))]
+    ((:hash handlers) display-name type hash)))
+
+(defmulti calculate-hash (fn [id _ _ _] id))
+
+(defmethod calculate-hash :md5
+  ^{:cli {:desc "md5 hash"}}
+  [_ display-name stream-factory handlers]
+  (calculate-pandect-hash :md5 md5 display-name stream-factory handlers))
+
+(defmethod calculate-hash :sha1 [_ display-name stream-factory handlers]
+  (calculate-pandect-hash :sha1 sha1 display-name stream-factory handlers))
 
 
 
-
+;;TODO: (:active-file-types opts) is a map of
+;;TODO: active file types {"jar" blah "zip" blah}
 (defn find-in-file [^File f ^File root opts handlers]
-  (when (valid-file? f opts)
+  (when (valid-file? f opts handlers)
     (let [display-name (if (:apath opts) (.getCanonicalPath f)
                                          (relative-path root f))]
-      (find-in-file-type f display-name opts))))
+      (find-in-file-type f display-name opts handlers))))
 
 (defn munge-regexes [opts]
   (let [{:keys [flags name grep path apath]} opts]
@@ -242,31 +274,31 @@
     (doseq [^File f (filter #(-> % .isFile) (file-seq root))]
       (find-in-file f root opts handlers))))
 
-(defn build-output-handlers []
-  {:warning     (fn [file type msg opts]
-                  (println "WARN: can not read file -" (.getPath file))
-
-                  :match (fn [display-name]
-                           (println display-name))
-
-                  :grep-match (fn [display-name line-nr hit? line opts]
-                                (println (str (str/trim display-name)
-                                              ":" (inc line-nr) (if hit? ">" ":")
-                                              (str/trim line)))))
-   :dump-stream dump-stream
-   :hash        (fn [display-name type hash])}
-                  ;(println (sha1 stream) display-name))}
-  )
+(defn default-handlers []
+  (reify FindJarHandler
+    (warn [file type msg opts]
+      (println "WARN: can not read file -" (.getPath file)))
+    (match [display-name]
+      (println display-name))
+    (grep-match [display-name line-nr hit? line opts]
+      (println (str (str/trim display-name)
+                    ":" (inc line-nr) (if hit? ">" ":")
+                    (str/trim line))))
+    (dump-stream [display-name stream-factory opts]
+      (dump-stream stream-factory display-name opts))       ;;TODO: switch arg order
+    (hash [display-name stream-factory hashes opts]
+      (doseq [hash hashes]
+        (calculate-hash hash display-name stream-factory handlers)))))
 
 (defn -main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
-        output-handlers {}
-        opts (assoc opts :search-root search-root)
+        handlers (default-handlers)
+        opts     (assoc opts :search-root search-root)
 
         ]
     (if exit-message
       (cli/exit (if ok? 0 1) exit-message)
-      (perform-file-scan opts output-handlers))))
+      (perform-file-scan opts handlers))))
 
 (defn repl-main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)]
