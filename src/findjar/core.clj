@@ -54,24 +54,6 @@
     set of options used to start the file scan"))
 
 
-(defn file-ext [^File f]
-  (let [p (.getCanonicalPath f)
-        i (.lastIndexOf p ".")]
-    (if (and (pos? i) (not (= (inc i) (count p))))
-      (subs p (inc i))
-      nil)))
-
-(defn valid-file? [^File f opts handler]                    ;;TODO: use multimethod file type
-  (let [active-types (:active-file-types opts)
-        ext          (.toLowerCase (file-ext f))
-        warn         (:warning handler)]
-    (and
-      (.isFile f)
-      (or (.canRead f)
-          (do (warn f :can-not-read "WARN: can not read file" opts)
-              false))
-      (get active-types ext))))
-
 (defn relative-path [^File search-root ^File f]
   (subs
     (str/replace (.getCanonicalPath f)
@@ -98,16 +80,17 @@
   (calculate-pandect-hash sha1 stream-factory))
 
 
-(defn print-line [^String display-name ^long n ^Boolean hit? ^String line]
-  (println (str (str/trim display-name) ":" (inc n) (if hit? ">" ":") (str/trim line))))
+;(defn print-line [^String display-name ^long n ^Boolean hit? ^String line]
+;  (println (str (str/trim display-name) ":" (inc n) (if hit? ">" ":") (str/trim line))))
+;
+;(defn md5-stream [stream-factory display-name]
+;  (with-open [stream (stream-factory)]
+;    (println (md5 stream) display-name)))
+;
+;(defn sha1-stream [stream-factory display-name]
+;  (with-open [stream (stream-factory)]
+;    (println (sha1 stream) display-name)))
 
-(defn md5-stream [stream-factory display-name]
-  (with-open [stream (stream-factory)]
-    (println (md5 stream) display-name)))
-
-(defn sha1-stream [stream-factory display-name]
-  (with-open [stream (stream-factory)]
-    (println (sha1 stream) display-name)))
 
 (defn matches-with-context [sliding context pattern display-name]
   (reduce
@@ -156,22 +139,22 @@
       (doseq [[_ n hit? line] (sort-by second uniques)]
         (grep-match handler display-name n hit? line opts)))))
 
-(defn grep-stream-original [stream-factory display-name opts]
-  "iterate through the file using a sliding window of
-  context lines before the 'current line' and context lines
-  after, output result on console on matches"
-  (with-open [stream (stream-factory)
-              reader (jio/reader stream)]
-    (let [s       (line-seq reader)
-          pattern (:grep opts)
-          context (or (:context opts) 0)
-          window  (inc (* 2 context))
-          pad     (repeat context nil)                      ;TODO: fix padding with empty string
-          sliding (partition window 1 (concat pad s pad))]
-      (doseq [[n lines] (map-indexed vector sliding)]
-        (when (re-find pattern (nth lines context))
-          (doseq [[cn l] (map-indexed #(vector (+ (- n context) %1) %2) lines)]
-            (print-line display-name cn (= cn n) l)))))))
+;(defn grep-stream-original [stream-factory display-name opts]
+;  "iterate through the file using a sliding window of
+;  context lines before the 'current line' and context lines
+;  after, output result on console on matches"
+;  (with-open [stream (stream-factory)
+;              reader (jio/reader stream)]
+;    (let [s       (line-seq reader)
+;          pattern (:grep opts)
+;          context (or (:context opts) 0)
+;          window  (inc (* 2 context))
+;          pad     (repeat context nil)                      ;TODO: fix padding with empty string
+;          sliding (partition window 1 (concat pad s pad))]
+;      (doseq [[n lines] (map-indexed vector sliding)]
+;        (when (re-find pattern (nth lines context))
+;          (doseq [[cn l] (map-indexed #(vector (+ (- n context) %1) %2) lines)]
+;            (print-line display-name cn (= cn n) l)))))))
 
 
 (defn stream-line-matches? [stream-factory ^Pattern pattern]
@@ -202,7 +185,6 @@
 ; TODO: make this a multi-method to enables more file formats
 ; TODO: make -type accept a set to support "-t fjg" for files, jar files, gzip files etc
 (defn find-in-jar
-
   [^File f display-name opts handler]
   (try
     (with-open [^ZipFile zip (ZipFile. f)]
@@ -238,46 +220,20 @@
 (comment
   (defmulti cli-file-type identity)
   (defmethod cli-file-type \j [_]
-    {:ext               "jar"
-     :desc              "jar files"
-     :search-by-default true})
+    {:ext     "jar"
+     :desc    "jar files"
+     :default true})
 
   (defmethod cli-file-type \z [_]
-    {:ext               "zip"
-     :desc              "zip files"
-     :search-by-default false})
+    {:ext     "zip"
+     :desc    "zip files"
+     :default false})
 
   (defmethod cli-file-type \d [_]
-    {:ext               nil
-     :desc              "disk files"
-     :search-by-default true})
+    {:ext     nil
+     :desc    "disk files"
+     :default true})
   )
-
-(defmulti find-in-file-type
-          (fn [^File f _ _ _] (file-ext f)))
-
-(defmethod find-in-file-type "jar"
-  ^{:cli {:desc              "jar files"
-          :search-by-default true
-          :char              \j}}
-  [^File f display-name opts handlers]
-  (find-in-jar f display-name opts handlers))
-
-(defmethod find-in-file-type "zip"
-  ^{:cli {:desc              "zip files"
-          :search-by-default false
-          :char              \z}}
-  [^File f display-name opts handlers]
-  (find-in-jar f display-name opts handlers))
-
-(defmethod find-in-file-type :default
-  ^{:cli {:desc              "disk files"
-          :search-by-default true
-          :char              \d}}
-  [^File f display-name opts handlers]
-  (let [file-name      (.getName f)
-        stream-factory #(jio/input-stream f)]
-    (print-stream-matches opts file-name display-name stream-factory handlers)))
 
 ;; extensible file hashing
 (comment
@@ -297,7 +253,7 @@
   (when (valid-file? f opts handler)
     (let [display-name (if (:apath opts) (.getCanonicalPath f)
                                          (relative-path root f))]
-      (find-in-file-type f display-name opts handler))))
+      (file-type-scanner f display-name opts handler))))
 
 (defn munge-regexes [opts]
   (let [{:keys [flags name grep path apath]} opts]
@@ -314,11 +270,17 @@
           [:name :grep :path :apath])))))
 
 (defn perform-file-scan [search-root handler opts]
-  (let [files (filter #(.isFile %) (file-seq search-root))]
+  (let [opts  (munge-regexes opts)
+        files (filter #(.isFile %) (file-seq search-root))]
     (doseq [^File f files]
       (find-in-file search-root f handler opts))))
 
-(defn default-handler []
+(defn default-handler
+  "returns an implementation of the FindJarHandler protocol. This moves all
+  side-effecting things out of the rest of the code and into this single place.
+  It also makes the rest of the code more testable and makes it possible for
+  users of this code to modify the behavior by supplying their own handler"
+  []
   (reify FindJarHandler
     (warn [_ file type msg opts]
       (println "WARN: can not read file -" (.getPath file)))
@@ -339,18 +301,18 @@
 
 (defn -main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
-        opts (munge-regexes opts)]
+        handler (default-handler)]
     (if exit-message
       (cli/exit (if ok? 0 1) exit-message)
-      (perform-file-scan search-root (default-handler) opts))))
+      (perform-file-scan search-root handler opts))))
 
 (defn repl-main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
-        opts (munge-regexes opts)]
+        handler (default-handler)]
     (prn :opts opts)
     (if (or exit-message true)
       (println "would exit with code " (if ok? 0 1) "msg," exit-message)
-      (perform-file-scan search-root (default-handler) opts))))
+      (perform-file-scan search-root handler opts))))
 
 (comment
 

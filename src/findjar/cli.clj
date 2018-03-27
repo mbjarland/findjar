@@ -1,10 +1,41 @@
 (ns findjar.cli
   (:require [clojure.string :as str]
             [clojure.tools.cli :refer [parse-opts]]
-            [clojure.java.io :refer [file]])
+            [clojure.java.io :refer [file]]
+            [findjar.core :as fc])
   (:gen-class))
 
 (def MAX_WIDTH 80)
+
+(defn file-types []
+  (apply
+    hash-map
+    (mapcat (fn [[k v]]
+              (let [m (v k)]
+                [(:char m) {:desc (:desc m) :default (:default m)}]))
+            (methods fc/file-type-scanner))))
+
+(defn file-type-selectors []
+  (str/join "|" (keys (file-types))))
+
+(defn file-type-descriptions []
+  (str/join ", "
+            (map
+              (fn [[k v]] (str k " - " (:desc v)))
+              (file-types))))
+
+(defn default-file-types []
+  (filter
+    (fn [[_ v]] (:default v))
+    (file-types)))
+
+(defn default-file-selectors []
+  (str/join (keys (default-file-types))))
+
+(defn validate-file-type [t]
+  (let [s (apply hash-set (keys (file-types)))]
+    (prn :s s)
+    (s t)))
 
 (defn wrap-line [width line]
   (let [words (str/split line #" ")]
@@ -36,13 +67,15 @@
         max-desc-width (- max-width (+ max-long-desc 8))]
     (wrap-opts max-desc-width margin opts)))
 
-(defn parse-type [type]
-  (if (= 1 (count type))
-    (->> type
-         (.toLowerCase)
-         (first))
-    (throw (proxy [Exception] []                            ; override toString to clean up error display
-             (toString [] (str "type has to be either j (Jar) or f (disk File)"))))))
+(def parse-types identity)
+
+;(defn parse-types [types]
+;  (if (= 1 (count type))
+;    (->> type
+;         (.toLowerCase)
+;         (first))
+;    (throw (proxy [Exception] []                            ; override toString to clean up error display
+;             (toString [] (str "type has to be either j (Jar) or f (disk File)"))))))
 
 (def cli-options
   (->> [;; First three strings describe a short-option, long-option with optional
@@ -54,13 +87,13 @@
         ["-g" "--grep <regex>"
          "a pattern to match against file content lines"
          :parse-fn #(re-pattern %)]
-        ["-t" "--type <j|d>"
-         "restrict the files searched to only jar files or only disk
-         files.
-          Note that the default behavior is to search both plain files on
-          disk and files inside jar files"
-         :parse-fn parse-type
-         :validate [#{\j \f} "type must be one of 'j' and 'f'"]]
+        ["-t" (str "--types <" (file-type-selectors) ">")
+         (str "restrict the files searched to only the type(s) specified.
+         The list of supported file types is extensible. Available file types:
+         \n" (file-type-descriptions))
+         :parse-fn parse-types
+         :validate [validate-file-type (str "type must be one of " (file-type-selectors))]
+         :default (default-file-selectors)]
         ["-p" "--path <regex>"
          "a pattern to match against the relative path starting from search-root"
          :parse-fn #(re-pattern %)]
@@ -78,8 +111,19 @@
           Pattern.html#special for details on java regex flags"]
 
         ["-c" "--cat" "cat file. For matching files, print the entire file contents on the console"]
-        ["-m" "--md5" "print md5 hash of matched files"]
-        ["-s" "--sha1" "print sha1 hash of matched files"]
+
+        ["-s" (str "--hash <" (str/join "|" (keys (file-types))) ">")
+         "restrict the files searched to only jar files or only disk
+         files.
+          Note that the default behavior is to search both plain files on
+          disk and files inside jar files"]
+        ;:parse-fn parse-type
+        ;:validate [#{\j \f} "type must be one of 'j' and 'f'"]]
+
+
+
+        ;["-m" "--md5" "print md5 hash of matched files"]
+        ;["-s" "--sha1" "print sha1 hash of matched files"]
         ["-h" "--help" "show usage information"]]
        (reformat-options MAX_WIDTH)))
 
@@ -142,3 +186,8 @@
 (defn exit [status msg]
   (println msg)
   (System/exit status))
+
+(comment
+  ;; print opts in repl 
+  (parse-opts ["-h"] cli-options :strict true)
+  )
