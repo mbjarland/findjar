@@ -6,8 +6,8 @@
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/tools.cli "0.3.5"]
                  [pandect/pandect "0.6.1"]]
-  :main findjar.core
-  :aot [findjar.core]
+  :main findjar.main
+  :aot [findjar.main]
   :bin { :name "findjar" 
          :bootclasspath true
          :custom-preamble-script "preamble.sh" }

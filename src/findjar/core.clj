@@ -1,14 +1,13 @@
 (ns findjar.core
-  (:require [findjar.cli :as cli]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojure.java.io :as jio]
             [pandect.algo.sha1 :refer [sha1]]
             [pandect.algo.md5 :refer [md5]]
             [pandect.algo.crc32 :refer [crc32*]])
-  (:gen-class)
   (:import (java.io File)
            (java.util.zip ZipFile ZipEntry)
-           (java.util.regex Pattern)))
+           (java.util.regex Pattern))
+  (:gen-class))
 
 (defprotocol FindJarHandler
   "a protocol definition to move all side effecting things
@@ -247,6 +246,55 @@
   )
 
 
+(defn file-ext [^File f]
+  (let [p (.getCanonicalPath f)
+        i (.lastIndexOf p ".")]
+    (if (and (pos? i) (not (= (inc i) (count p))))
+      (subs p (inc i))
+      nil)))
+
+(defn valid-file? [^File f opts handler]                    ;;TODO: use multimethod file type
+  (let [active-types (:enabled-file-types opts)
+        ext          (.toLowerCase (file-ext f))
+        warn         (:warning handler)]
+    (and
+      (.isFile f)
+      (or (.canRead f)
+          (do (warn f :can-not-read "WARN: can not read file" opts)
+              false))
+      (get active-types ext))))
+
+(defmulti file-type-scanner
+          (fn [^File f] (file-ext f)))
+
+
+(defmethod file-type-scanner "jar"
+  [^File f]
+  {:fn      (fn [display-name opts handler]
+              (find-in-jar f display-name opts handler))
+   :desc    "files in jar files"
+   :default true
+   :char    \j})
+
+(defmethod file-type-scanner "zip"
+  [^File f]
+  {:fn      (fn [display-name opts handler]
+              (find-in-jar f display-name opts handler))
+   :desc    "files in zip files"
+   :default false
+   :char    \z})
+
+(defmethod file-type-scanner :default
+  [^File f]
+  {:fn      (fn [display-name opts handler]
+              (let [file-name      (.getName f)
+                    stream-factory #(jio/input-stream f)]
+                (print-stream-matches opts file-name display-name stream-factory handler)))
+   :desc    "files on disk"
+   :default true
+   :char    \d})
+
+
 ;;TODO: (:active-file-types opts) is a map of
 ;;TODO: active file types {"jar" blah "zip" blah}
 (defn find-in-file [^File root ^File f handler opts]
@@ -275,49 +323,3 @@
     (doseq [^File f files]
       (find-in-file search-root f handler opts))))
 
-(defn default-handler
-  "returns an implementation of the FindJarHandler protocol. This moves all
-  side-effecting things out of the rest of the code and into this single place.
-  It also makes the rest of the code more testable and makes it possible for
-  users of this code to modify the behavior by supplying their own handler"
-  []
-  (reify FindJarHandler
-    (warn [_ file type msg opts]
-      (println "WARN: can not read file -" (.getPath file)))
-
-    (match [_ display-name]
-      (println display-name))
-
-    (grep-match [_ display-name line-nr hit? line opts]
-      (println (str (str/trim display-name)
-                    ":" (inc line-nr) (if hit? ">" ":")
-                    (str/trim line))))
-
-    (dump-stream [_ display-name stream-factory opts]
-      (default-dump-stream stream-factory display-name opts)) ;;TODO: switch arg order
-
-    (print-hash [_ display-name hash-type hash-value opts]
-      (println hash-value display-name))))
-
-(defn -main [& args]
-  (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
-        handler (default-handler)]
-    (if exit-message
-      (cli/exit (if ok? 0 1) exit-message)
-      (perform-file-scan search-root handler opts))))
-
-(defn repl-main [& args]
-  (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
-        handler (default-handler)]
-    (prn :opts opts)
-    (if (or exit-message true)
-      (println "would exit with code " (if ok? 0 1) "msg," exit-message)
-      (perform-file-scan search-root handler opts))))
-
-(comment
-
-  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
-             "-n" "GLOBAL.properties"
-             "-g" "logging")
-
-  )
