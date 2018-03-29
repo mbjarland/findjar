@@ -6,7 +6,9 @@
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/tools.cli "0.3.5"]
                  [pandect/pandect "0.6.1"]
-                 [jansi-clj "0.1.1"]]
+                 [jansi-clj "0.1.1"]
+                 ;[com.taoensso/tufte "1.4.0"]
+                 ]
   :main findjar.main
   :aot [findjar.main]
   :bin { :name "findjar" 

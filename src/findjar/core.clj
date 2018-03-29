@@ -3,10 +3,11 @@
             [clojure.java.io :as jio]
             [pandect.algo.sha1 :refer [sha1]]
             [pandect.algo.md5 :refer [md5]]
-            [pandect.algo.crc32 :refer [crc32]])
-  (:import (java.io File LineNumberReader)
-           (java.util.zip ZipFile ZipEntry)
-           (java.util.regex Pattern Matcher))
+            [pandect.algo.crc32 :refer [crc32]]
+            ;[taoensso.tufte :as tufte :refer [p profiled profile defnp]]
+            )
+  (:import (java.util.zip ZipFile ZipEntry)
+           (java.io File))
   (:gen-class))
 
 (defprotocol FindJarHandler
@@ -14,7 +15,7 @@
   to the edges of the findjar code. We send in a handler
   into the findjar entry point and all side effecting things
   are then handled by the handler"
-  (warn [this file type msg e opts]
+  (warn [this file type msg ex opts]
     "called on errors during file scan. First argument is a java '
     file object, second a keyword indicating error type, third a
     message describing the issue, and fourth the full set of options
@@ -82,8 +83,17 @@
            (calculate-pandect-hash crc32 stream-factory))
    :desc "crc32"})
 
+(defn match-idxs [pattern str]
+  (let [matcher (re-matcher pattern str)]
+    (loop [r nil]
+      (if (re-find matcher)
+        (recur (conj (if (nil? r) [] r)
+                     {:start (.start matcher)
+                      :end   (.end matcher)}))
+        r))))
+
 (defn sliding->matches
-  [path match-line-# context lines ^Matcher matcher]
+  [path match-line-# context lines match-idxs]
   (keep
     (fn [[cn line]]
       (when line
@@ -92,21 +102,19 @@
                     :line-# cn
                     :hit?   hit?
                     :line   line}]
-          (if hit?
-            (merge m {:start-col (.start matcher) :end-col (.end matcher)})
-            m))))
+          (if hit? (assoc m :match-idxs match-idxs) m))))
     (map-indexed #(vector (+ (- match-line-# context) %1) %2) lines)))
 
 (defn matches-with-context [sliding context pattern path]
   (reduce
     (fn [a [match-# lines]]
-      (let [matcher (re-matcher pattern (nth lines context))]
-        (if (re-find matcher)
+      (let [match-idxs (match-idxs pattern (nth lines context))]
+        (if match-idxs
           (concat a (sliding->matches path
                                       match-#
                                       context
                                       lines
-                                      matcher))
+                                      match-idxs))
           a)))
     []
     (map-indexed vector sliding)))
@@ -186,10 +194,10 @@
   (let [{:keys [name grep path apath cat hashes]} opts
         macro-op (or cat md5 sha1)]
     (cond
-      (and apath (not (re-find apath file-path))) nil            ; no apath match
-      (and path (not (re-find path file-path))) nil              ; no path match
+      (and apath (not (re-find apath file-path))) nil       ; no apath match
+      (and path (not (re-find path file-path))) nil         ; no path match
       (and name (not (re-find name file-name))) nil         ; no name match
-      (not (or macro-op grep)) (match handler file-path)         ; normal non-grep match
+      (not (or macro-op grep)) (match handler file-path)    ; normal non-grep match
       (and grep macro-op (not (stream-line-matches? stream-factory grep))) nil ;grep+macro and no matches -> nil
       hashes (calculate-hashes file-path stream-factory hashes handler opts)
       cat (dump-stream handler file-path stream-factory opts)
@@ -200,20 +208,21 @@
 ; TODO: make this a multi-method to enables more file formats
 ; TODO: make -type accept a set to support "-t fjg" for files, jar files, gzip files etc
 (defn find-in-jar
-  [f path opts handler]
-  (try
-    (with-open [^ZipFile zip (ZipFile. ^File f)]
-      (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
-        (let [entry-path     (.getName entry)
-              entry-name     (.getName (jio/file entry-path))
-              path           (str (str/trim path) "@" (str/trim entry-path))
-              stream-factory #(.getInputStream zip entry)]
-          (print-stream-matches opts entry-name path stream-factory handler))))
-    (catch Exception e
-      (warn handler f :error-opening
-            (str "error opening " (.getPath f) ", error (" (.getSimpleName (class e)) "):" (.getMessage e))
-            e
-            opts))))
+  [jar path opts handler]
+  (when (pos? (.length jar))
+    (try
+      (with-open [^ZipFile zip (ZipFile. ^File jar)]
+        (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
+          (let [entry-path     (.getName entry)
+                entry-name     (.getName (jio/file entry-path))
+                path           (str (str/trim path) "@" (str/trim entry-path))
+                stream-factory #(.getInputStream zip entry)]
+            (print-stream-matches opts entry-name path stream-factory handler))))
+      (catch Exception e
+        (warn handler jar :error-opening
+              (str (.getSimpleName (class e)) " opening " (.getPath jar) " - " (.getMessage e))
+              e
+              opts)))))
 
 (defn default-dump-stream [stream-factory path opts]
   (let [of (:out-file opts)]
@@ -239,17 +248,17 @@
       (subs p (inc i))
       nil)))
 
-(defn valid-file? [^File f opts handler]                    ;;TODO: use multimethod file type
-  (let [active-types (:types opts)
-        ext          (.toLowerCase (file-ext f))
-        file?        (.isFile f)]
-    (boolean
-      (and file?
-           (or (some #{:default} active-types)
-               (some #{ext} active-types))
-           (or (.canRead f)
-               (do (warn handler f :can-not-read "WARN: can not read file" nil opts)
-                   false))))))
+(defn valid-file? [^File f default? opts handler]           ;;TODO: use multimethod file type
+  (when (.isFile f)
+    (let [active-types (:types opts)]
+      (boolean
+        (and (or default?
+                 (some #(and (string? %)
+                             (.endsWith (.getName f) %))
+                       active-types))
+             (or (.canRead f)
+                 (do (warn handler f :can-not-read "WARN: can not read file" nil opts)
+                     false)))))))
 
 (defmulti file-type-scanner
           (fn [^File f] (file-ext f)))
@@ -305,8 +314,9 @@
           [:name :grep :path :apath])))))
 
 (defn perform-file-scan [search-root handler opts]
-  (let [opts  (munge-regexes opts)
-        files (filter #(valid-file? % opts handler) (file-seq search-root))]
+  (let [default? (some #{:default} (:types opts))
+        opts     (munge-regexes opts)
+        files    (filter #(valid-file? % default? opts handler) (file-seq search-root))]
     (doseq [^File f files]
-      (find-in-file search-root f handler opts))))
+      :find-in-file (find-in-file search-root f handler opts))))
 
