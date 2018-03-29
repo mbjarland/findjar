@@ -7,13 +7,38 @@
 
 (def MAX_WIDTH 78)
 
+(defn multimethod-meta [multi]
+  (reduce
+    (fn [a [k v]]
+      (assoc a k (v k)))
+    {}
+    (methods multi)))
+
+(defn hash-selectors []
+  (str/join
+    ", "
+    (map (fn [[k v]] (:desc v))
+         (multimethod-meta c/calculate-hash))))
+
+(defn hash-keys []
+  (keys (multimethod-meta c/calculate-hash)))
+
+(defn parse-hash-desc [desc]
+  (let [m (reduce
+            (fn [a [k v]] (assoc a (:desc v) k))
+            {}
+            (multimethod-meta c/calculate-hash))]
+    (m desc)))
+
 (defn file-types []
-  (apply
-    hash-map
-    (mapcat (fn [[k v]]
-              (let [m (v k)]
-                [(:char m) (assoc (select-keys m [:desc :default]) :ext k)]))
-            (methods c/file-type-scanner))))
+  (reduce
+    (fn [a [k v]]
+      (assoc a (:char v)
+               {:desc    (:desc v)
+                :default (:default v)
+                :ext     k}))
+    {}
+    (multimethod-meta c/file-type-scanner)))
 
 (defn file-type-selectors []
   (str/join "|" (keys (file-types))))
@@ -122,14 +147,14 @@
       "--cat"
       "cat file. For matching files, print the entire file contents on the console"]
 
-     ["-s"
-      (str "--hash <" (str/join "|" (keys (file-types))) ">")
-      "restrict the files searched to only jar files or only disk
-      files.
-       Note that the default behavior is to search both plain files on
-       disk and files inside jar files"]
-     ;:parse-fn parse-type
-     ;:validate [#{\j \f} "type must be one of 'j' and 'f'"]]
+     ["-s" "--hash <algo>"
+      (str "calculate file hash(es) for matched files. Available algorithms: "
+           (hash-selectors))
+      :parse-fn parse-hash-desc
+      :assoc-fn (fn [m k v] (update-in m [k] #(into [] (conj % v))))
+      :validate [#(do
+                    (prn :validate %)
+                    (boolean %)) (str "hash must be one of " (hash-selectors) "!")]]
 
 
 
@@ -219,6 +244,23 @@
   (System/exit status))
 
 (comment
-  ;; print opts in repl 
-  (parse-opts ["-h"] (cli-options) :strict true)
+  ;; print opts in repl
+  (cli/parse-opts ["-h"]
+                  (cli-options)
+                  :strict true
+                  :summary-fn summarize)
+
+  ;; provide multiple hash algs
+  (cli/parse-opts ["-s" "sha1" "-s" "md5"]
+                  (cli-options)
+                  :strict true
+                  :summary-fn summarize)
+
+  ;; parse a real set of opts
+  (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
+                  (cli-options)
+                  :strict true
+                  :summary-fn summarize)
+
+
   )
