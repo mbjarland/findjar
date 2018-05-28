@@ -7,7 +7,8 @@
     ;[taoensso.tufte :as tufte :refer [p profiled profile defnp]]
             )
   (:import (java.util.zip ZipFile ZipEntry)
-           (java.io File))
+           (java.io File)
+           (java.util.regex Pattern))
   (:gen-class))
 
 (defprotocol FindJarHandler
@@ -192,11 +193,11 @@
 ;; TODO: Match on paths - implement path and apath in the cond below
 (defn print-stream-matches [opts file-name file-path stream-factory handler]
   (let [{:keys [name grep path apath cat hashes]} opts
-        macro-op (or cat md5 sha1)]
+        macro-op (or cat hashes)]
     (cond
-      (and apath (not (re-find apath file-path))) nil       ; no apath match
-      (and path (not (re-find path file-path))) nil         ; no path match
-      (and name (not (re-find name file-name))) nil         ; no name match
+      (and apath (not (re-find apath file-path))) nil       ; no apath match -> exit
+      (and path (not (re-find path file-path))) nil         ; no path match -> exit
+      (and name (not (re-find name file-name))) nil         ; no name match -> exit
       (not (or macro-op grep)) (match handler file-path)    ; normal non-grep match
       (and grep macro-op (not (stream-line-matches? stream-factory grep))) nil ;grep+macro and no matches -> nil
       hashes (calculate-hashes file-path stream-factory hashes handler opts)
@@ -217,6 +218,8 @@
                 entry-name     (.getName (jio/file entry-path))
                 path           (str (str/trim path) "@" (str/trim entry-path))
                 stream-factory #(.getInputStream zip entry)]
+                (prn :entry-path entry-path :entry-name entry-name :path path)
+                (prn :opts opts)
             (print-stream-matches opts entry-name path stream-factory handler))))
       (catch Exception e
         (warn handler jar :error-opening
@@ -298,7 +301,8 @@
 (defn perform-file-scan [search-root handler opts]
   (let [default? (some #{:default} (:types opts))
         opts     (munge-regexes opts)
-        files    (filter #(valid-file? % default? opts handler) (file-seq search-root))]
+        files    (filter #(valid-file? % default? opts handler) 
+                         (file-seq search-root))]
     (doseq [^File f files]
-      :find-in-file (find-in-file search-root f handler opts))))
+      (find-in-file search-root f handler opts))))
 
