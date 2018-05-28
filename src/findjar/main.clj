@@ -19,14 +19,14 @@
                   idxs)]
     (conj r l)))
 
-(defn highlight-matches [hit? line match-idxs color-fn]
+(defn highlight-matches [hit? line match-idxs hit-color-fn]
   (if (not hit?)
     line
     (let [tokens (split-at-idxs line (mapcat vals match-idxs))]
       (first
         (reduce
           (fn [[a h?] token]
-            [(str a (if h? (color-fn token) token)) (not h?)])
+            [(str a (if h? (hit-color-fn token) token)) (not h?)])
           ["" false]
           tokens)))))
 
@@ -48,16 +48,16 @@
     (match [_ path]
       (println path))
 
-    ;{:path s :line-nr n :max-line-n :hit? b :start-col ns :end-col ne}"
+    ;{:path 'path', :line-# 1,  :hit? true,  :line '2222', :match-idxs [{:start 0, :end 2} {:start 2, :end 4}]}
     (grep-match
-      [_ max-line-# {:keys [path line-# hit? match-idxs line]} opts]
+      [_ max-line-# {:keys [path line-# hit? line match-idxs]} opts]
       (let [context?  (< 0 (or (:context opts) 0))
             display-# (inc line-#)
             max       (count (str max-line-#))
             len       (count (str display-#))
             pad       (str/join (repeat (inc (- max len)) \space))]
         (println (str (str/trim path)
-                      (if (and (not hit?) context?) "-" ":")
+                      (if (and (not hit?) context?) " " ":")
                       display-#
                       pad
                       (highlight-matches hit? line match-idxs ansi/red)))))
@@ -102,13 +102,13 @@
 
 (comment
 
-  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+  (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
              "-n" "GLOBAL.properties"
-             "-g" "logging")
+             "-s" "sha1")
 
   (repl-main "."
-             "-n" "test.txt"
-             "-g" "222")
+             "-n" "main.clj"
+             "-g" "main.clj")
 
   ;; parse a real set of opts
   (cli/parse-opts ["." "-n" ".clj" "-t" "d"]

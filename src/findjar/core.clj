@@ -24,7 +24,7 @@
   (match [this path]
     "called when a normal (as in a non-grep) file name/path match
     is encountered")
-  (grep-match [this max-line-# match opts]
+  (grep-match [this max-line-# line-map opts]
     "called when a matching line is found in the content of a file
     (as opposed to matching only on file name/path). See docstring for
     'match' for description of path. The second argument
@@ -32,8 +32,12 @@
     the containing file (for padding the output), the third argument
     is a a map on the format:
 
-    {:path s :line-# n :max-line-# p :line data :hit? b
-     :start-col j :end-col k}
+    {:path p :line-# n :hit? true :line data
+     :match-idxs [{:start 14, :end 16}
+                  {:start 16, :end 18}
+                  {:start 18, :end 20}]}]
+
+    where the match-idxs is only present if the line is a hit.
 
     The fourth argument is the full set of options used to start the
     file scan")
@@ -67,7 +71,7 @@
   (with-open [stream (stream-factory)]
     (pandect-fn stream)))
 
-(defmulti calculate-hash (fn [id _ _ _] id))
+(defmulti calculate-hash (fn [id] id))
 
 (defmethod calculate-hash :md5 [_]
   {:fn   (fn [stream-factory]
@@ -93,7 +97,8 @@
                       :end   (.end matcher)}))
         r))))
 
-(defn sliding->matches
+(defn window->matching-lines
+  ""
   [path match-line-# context lines match-idxs]
   (keep
     (fn [[cn line]]
@@ -106,21 +111,7 @@
           (if hit? (assoc m :match-idxs match-idxs) m))))
     (map-indexed #(vector (+ (- match-line-# context) %1) %2) lines)))
 
-(defn matches-with-context [sliding context pattern path]
-  (reduce
-    (fn [a [match-# lines]]
-      (let [match-idxs (match-idxs pattern (nth lines context))]
-        (if match-idxs
-          (concat a (sliding->matches path
-                                      match-#
-                                      context
-                                      lines
-                                      match-idxs))
-          a)))
-    []
-    (map-indexed vector sliding)))
-
-(defn remove-duplicated-lines
+(defn dedupe-line-maps
   "removes lines which are duplicated by the context lines
   window functionality. Multiple lines with the same line number
   should be folded into one and when possible, matching lines
@@ -135,12 +126,56 @@
     []
     (group-by :line-# matches)))
 
+
+(defn find-line-maps-with-context
+  "takes a sliding window of lines, a number indicating the number of
+  context lines, a regex pattern to match for, a path to use for displaying
+  output and generates a collection of 'matching lines' represented as maps on the
+  following format (context 2) :
+
+    ({:path 'path', :line-# 0,  :hit? false, :line '1111'}
+     {:path 'path', :line-# 1,  :hit? true,  :line '2222', :match-idxs [{:start 0, :end 2} {:start 2, :end 4}]}
+     {:path 'path', :line-# 2,  :hit? false, :line '3333'}
+     {:path 'path', :line-# 3,  :hit? false, :line 'to be222or not222to be'}
+     {:path 'path', :line-# 1,  :hit? false, :line '2222'}
+     {:path 'path', :line-# 2,  :hit? false, :line '3333'}
+     {:path 'path', :line-# 3,  :hit? true,  :line 'to be222or not222to be', :match-idxs [{:start 5, :end 7} {:start 14, :end 16}]}
+     {:path 'path', :line-# 4,  :hit? false, :line '5555'}
+     {:path 'path', :line-# 5,  :hit? false, :line '6666'}
+     ...)
+
+  the argument sliding window is represented as a list of lists:
+
+   '('(nil nil '1111' '2222' '3333') '(nil '1111' '2222' '3333'...) ...)
+
+  where 1111 is the content on the first line etc."
+  [sliding context pattern path]
+  (reduce
+    (fn [a [window-# lines]]
+      (let [match-idxs (match-idxs pattern (nth lines context))]
+        (if match-idxs                                      ; if there was a match
+          (concat a (window->matching-lines path
+                                            window-#
+                                            context
+                                            lines
+                                            match-idxs))
+          a)))
+    []
+    (map-indexed vector sliding)))
+
 (comment
   (grep-stream "path"
                #(jio/input-stream "test.txt")
                (findjar.main/default-handler)
                {:context 2
                 :grep    #"22"})
+
+  (grep-stream "path"
+               #(jio/input-stream "test.txt")
+               (findjar.main/default-handler)
+               {:context 2
+                :grep    #"12345"})
+
   )
 
 (defn grep-stream [path stream-factory handler opts]
@@ -149,18 +184,19 @@
   after, output result on console on matches"
   (with-open [stream (stream-factory)
               reader (jio/reader stream)]
-    (let [s          (line-seq reader)
-          pattern    (:grep opts)
-          context    (or (:context opts) 0)
-          window     (inc (* 2 context))
-          pad        (repeat context nil)                   ;TODO: fix padding with empty string
-          sliding    (partition window 1 (concat pad s pad))
-          matches    (matches-with-context sliding context pattern path)
-          uniques    (remove-duplicated-lines matches)
-          max-line-# (apply max (map :line-# uniques))]
-      ;[path line-number match? line]
-      (doseq [match (sort-by :line-# uniques)]
-        (grep-match handler max-line-# match opts)))))
+    (let [s         (line-seq reader)
+          pattern   (:grep opts)
+          context   (or (:context opts) 0)
+          window    (inc (* 2 context))
+          pad       (repeat context nil)                    ;TODO: fix padding with empty string
+          sliding   (partition window 1 (concat pad s pad))
+          line-maps (find-line-maps-with-context sliding context pattern path)]
+      (when (not-empty line-maps)
+        (let [uniques    (dedupe-line-maps line-maps)
+              max-line-# (reduce max (map :line-# uniques))]
+          ;[path line-number match? line]
+          (doseq [line-map (sort-by :line-# uniques)]
+            (grep-match handler max-line-# line-map opts)))))))
 
 ;(defn grep-stream-original [stream-factory path opts]
 ;  "iterate through the file using a sliding window of
@@ -185,22 +221,25 @@
     (let [reader (jio/reader stream)]
       (some (fn [line] (re-find pattern line)) (line-seq reader)))))
 
-(defn calculate-hashes [path stream-factory hashes handler opts]
-  (doseq [h hashes]
-    (let [hash (calculate-hash h stream-factory)]
-      (print-hash handler path h hash opts))))
+(defn calculate-hashes
+  "hash-types is a coll of keywords :md5 :sha1 etc"
+  [path stream-factory hash-types handler opts]
+  (doseq [hash-type hash-types]
+    (let [
+          hash-fn    (:fn (calculate-hash hash-type))
+          hash-value (hash-fn stream-factory)]
+      (print-hash handler path hash-type hash-value opts))))
 
-;; TODO: Match on paths - implement path and apath in the cond below
 (defn print-stream-matches [opts file-name file-path stream-factory handler]
-  (let [{:keys [name grep path apath cat hashes]} opts
-        macro-op (or cat hashes)]
+  (let [{:keys [name grep path apath cat hash]} opts
+        macro-op (or cat hash)]
     (cond
       (and apath (not (re-find apath file-path))) nil       ; no apath match -> exit
       (and path (not (re-find path file-path))) nil         ; no path match -> exit
       (and name (not (re-find name file-name))) nil         ; no name match -> exit
       (not (or macro-op grep)) (match handler file-path)    ; normal non-grep match
       (and grep macro-op (not (stream-line-matches? stream-factory grep))) nil ;grep+macro and no matches -> nil
-      hashes (calculate-hashes file-path stream-factory hashes handler opts)
+      hash (calculate-hashes file-path stream-factory hash handler opts)
       cat (dump-stream handler file-path stream-factory opts)
       grep (grep-stream file-path stream-factory handler opts))))
 
@@ -218,8 +257,6 @@
                 entry-name     (.getName (jio/file entry-path))
                 path           (str (str/trim path) "@" (str/trim entry-path))
                 stream-factory #(.getInputStream zip entry)]
-                (prn :entry-path entry-path :entry-name entry-name :path path)
-                (prn :opts opts)
             (print-stream-matches opts entry-name path stream-factory handler))))
       (catch Exception e
         (warn handler jar :error-opening
@@ -301,7 +338,7 @@
 (defn perform-file-scan [search-root handler opts]
   (let [default? (some #{:default} (:types opts))
         opts     (munge-regexes opts)
-        files    (filter #(valid-file? % default? opts handler) 
+        files    (filter #(valid-file? % default? opts handler)
                          (file-seq search-root))]
     (doseq [^File f files]
       (find-in-file search-root f handler opts))))

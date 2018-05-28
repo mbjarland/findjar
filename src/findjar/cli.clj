@@ -147,6 +147,10 @@
       "--cat"
       "cat file. For matching files, print the entire file contents on the console"]
 
+     ["-m"
+      "--monochrome"
+      "turn off ansi-coloring of matching content lines"]
+
      ["-s" "--hash <algo>"
       (str "calculate file hash(es) for matched files. Available algorithms: "
            (hash-selectors))
