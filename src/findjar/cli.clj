@@ -156,7 +156,9 @@
                     (prn :validate %)
                     (boolean %)) (str "hash must be one of " (hash-selectors) "!")]]
 
-
+     ;["-n"
+     ; "--no-color"
+     ; "turn off ansi coloring of matches"]
 
      ;["-m" "--md5" "print md5 hash of matched files"]
      ;["-s" "--sha1" "print sha1 hash of matched files"]

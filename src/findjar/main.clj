@@ -3,9 +3,10 @@
             [clojure.string :as str]
             [findjar.cli :as cli]
             [jansi-clj.core :as ansi]
-            ;[taoensso.tufte :as tufte :refer [p profiled profile defnp]]
-            )
-  (:gen-class))
+    ;[taoensso.tufte :as tufte :refer [p profiled profile defnp]]
+            [clojure.java.io :as jio])
+  (:gen-class)
+  (:import (java.io LineNumberReader File)))
 
 (defn split-at-idxs [str idxs]
   (let [[r l _] (reduce
@@ -29,6 +30,11 @@
           ["" false]
           tokens)))))
 
+(defn stream-line-count [stream-factory]
+  (with-open [r (LineNumberReader. (jio/reader (stream-factory)))]
+    (.skip r Long/MAX_VALUE)
+    (.getLineNumber r)))
+
 (defn default-handler
   "returns an implementation of the FindJarHandler protocol. This moves all
   side-effecting things out of the rest of the code and into this single place.
@@ -51,14 +57,30 @@
             len       (count (str display-#))
             pad       (str/join (repeat (inc (- max len)) \space))]
         (println (str (str/trim path)
-                      ":"
-                      (if (and hit? context?) (ansi/red display-#) display-#)
+                      (if (and (not hit?) context?) "-" ":")
+                      display-#
                       pad
                       (highlight-matches hit? line match-idxs ansi/red)))))
-    
+
 
     (dump-stream [_ path stream-factory opts]
-      (c/default-dump-stream stream-factory path opts))     ;;TODO: switch arg order
+      (let [^File of (:out-file opts)]
+        (if of
+          (do
+            (with-open [w (jio/writer of :append true)]
+              (.write w (str "<<<<<<< " path \newline))
+              (jio/copy (stream-factory) w)
+              (.write w (str ">>>>>>>" \newline)))
+            (println path ">>" (.getPath of)))
+          (with-open [reader (jio/reader (stream-factory))]
+            (println (ansi/red "<<<<<<<") path)
+            (let [k (count (str (stream-line-count stream-factory)))
+                  s (line-seq reader)]
+              (doseq [[n line] (map-indexed vector s)]
+                (let [j (count (str (inc n)))
+                      p (str/join (repeat (- k j) \space))]
+                  (println (ansi/green (str p (inc n))) (str/trim line)))))
+            (println (ansi/red ">>>>>>>"))))))
 
     (print-hash [_ path hash-type hash-value opts]
       (println hash-value path))))

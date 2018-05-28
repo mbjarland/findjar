@@ -4,7 +4,7 @@
             [pandect.algo.sha1 :refer [sha1]]
             [pandect.algo.md5 :refer [md5]]
             [pandect.algo.crc32 :refer [crc32]]
-            ;[taoensso.tufte :as tufte :refer [p profiled profile defnp]]
+    ;[taoensso.tufte :as tufte :refer [p profiled profile defnp]]
             )
   (:import (java.util.zip ZipFile ZipEntry)
            (java.io File))
@@ -179,7 +179,7 @@
 ;            (print-line path cn (= cn n) l)))))))
 
 
-(defn stream-line-matches? [stream-factory ^Pattern pattern]
+(defn stream-line-matches? [stream-factory pattern]
   (with-open [stream (stream-factory)]
     (let [reader (jio/reader stream)]
       (some (fn [line] (re-find pattern line)) (line-seq reader)))))
@@ -224,23 +224,6 @@
               e
               opts)))))
 
-(defn default-dump-stream [stream-factory path opts]
-  (let [of (:out-file opts)]
-    (if of
-      (do
-        (with-open [w (jio/writer of :append true)]
-          (.write w (str "<<<<<<< " path \newline))
-          (jio/copy (stream-factory) w)
-          (.write w (str ">>>>>>>" \newline)))
-        (println path ">>" (.getPath of)))
-      (with-open [stream (stream-factory)
-                  reader (jio/reader stream)]
-        (println "<<<<<<<" path)
-        (let [s (line-seq reader)]
-          (doseq [[n line] (map-indexed vector s)]
-            (println (inc n) (str/trim line))))
-        (println ">>>>>>>")))))
-
 (defn file-ext [^File f]
   (let [p (.getCanonicalPath f)
         i (.lastIndexOf p ".")]
@@ -262,7 +245,6 @@
 
 (defmulti file-type-scanner
           (fn [^File f] (file-ext f)))
-
 
 (defmethod file-type-scanner "jar"
   [^File f]
