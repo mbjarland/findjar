@@ -9,36 +9,36 @@
 
 (defn multimethod-meta [multi]
   (reduce
-    (fn [a [k v]]
-      (assoc a k (v k)))
-    {}
-    (methods multi)))
+   (fn [a [k v]]
+     (assoc a k (v k)))
+   {}
+   (methods multi)))
 
 (defn hash-selectors []
   (str/join
-    ", "
-    (map (fn [[k v]] (:desc v))
-         (multimethod-meta c/calculate-hash))))
+   ", "
+   (map (fn [[k v]] (:desc v))
+        (multimethod-meta c/calculate-hash))))
 
 (defn hash-keys []
   (keys (multimethod-meta c/calculate-hash)))
 
 (defn parse-hash-desc [desc]
   (let [m (reduce
-            (fn [a [k v]] (assoc a (:desc v) k))
-            {}
-            (multimethod-meta c/calculate-hash))]
+           (fn [a [k v]] (assoc a (:desc v) k))
+           {}
+           (multimethod-meta c/calculate-hash))]
     (m desc)))
 
 (defn file-types []
   (reduce
-    (fn [a [k v]]
-      (assoc a (:char v)
-               {:desc    (:desc v)
-                :default (:default v)
-                :ext     k}))
-    {}
-    (multimethod-meta c/file-type-scanner)))
+   (fn [a [k v]]
+     (assoc a (:char v)
+              {:desc    (:desc v)
+               :default (:default v)
+               :ext     k}))
+   {}
+   (multimethod-meta c/file-type-scanner)))
 
 (defn file-type-selectors []
   (str/join "|" (keys (file-types))))
@@ -46,13 +46,13 @@
 (defn file-type-descriptions []
   (str/join ", "
             (map
-              (fn [[k v]] (str k " - " (:desc v)))
-              (file-types))))
+             (fn [[k v]] (str k " - " (:desc v)))
+             (file-types))))
 
 (defn default-file-types []
   (filter
-    (fn [[_ v]] (:default v))
-    (file-types)))
+   (fn [[_ v]] (:default v))
+   (file-types)))
 
 (defn default-file-type-exts []
   (mapv (fn [[k v]] (:ext v)) (default-file-types)))
@@ -74,11 +74,11 @@
   "apply a function to the descriptions of the command line opts,
   returning a new set of opts with the altered descriptions"
   (reduce
-    (fn [c [short long desc & rest]]
-      (let [modded (wrap-desc width margin desc)]
-        (conj c (into [short long modded] rest))))
-    []
-    opts))
+   (fn [c [short long desc & rest]]
+     (let [modded (wrap-desc width margin desc)]
+       (conj c (into [short long modded] rest))))
+   []
+   opts))
 
 ;TODO: move this formatting into summarize
 (defn reformat-options [max-width opts]
@@ -92,102 +92,117 @@
   (let [m (file-types)]
     (map #(:ext (get m %)) types)))
 
-;(defn parse-types [types]
-;  (if (= 1 (count type))
-;    (->> type
-;         (.toLowerCase)
-;         (first))
-;    (throw (proxy [Exception] []                            ; override toString to clean up error display
-;             (toString [] (str "type has to be either j (Jar) or f (disk File)"))))))
-
 (defn cli-options []
   (reformat-options
-    MAX_WIDTH
-    [;; First three strings describe a short-option, long-option with optional
-     ;; example argument description, and a description. All three are optional
-     ;; and positional.
-     ["-n"
-      "--name <regex>"
-      "a pattern to match against file names"
-      :parse-fn #(re-pattern %)]
-     ["-g"
-      "--grep <regex>"
-      "a pattern to match against file content lines"
-      :parse-fn #(re-pattern %)]
-     ["-t"
-      (str "--types <" (file-type-selectors) ">")
-      (str "restrict the files searched to only the type(s) specified. "
-           "The list of supported file types is extensible. Available file types: "
-           (file-type-descriptions))
-      :default (default-file-type-exts)
-      :parse-fn parse-types
-      :validate [#(every? (comp not nil?) %) (str "type must be one of " (file-type-selectors))]]
-     ["-p"
-      "--path <regex>"
-      "a pattern to match against the relative path starting from search-root"
-      :parse-fn #(re-pattern %)]
-     ["-a"
-      "--apath <regex>"
-      "a pattern to match against the absolute path"
-      :parse-fn #(re-pattern %)]
-     ["-x"
-      "--context <#>"
-      "If -c is given, show <# of lines> lines of context around the match, defaults to 0"
-      :parse-fn #(Integer/parseInt %)]
-     ["-o"
-      "--out-file <path>"
-      "when using -c (cat file), write the contents of the located file(s) to the output file"
-      :parse-fn #(clojure.java.io/as-file %)]
-     ["-f"
-      "--flags <flags>"
-      "turns on regex flags for all matches used. Example: -f i turns on case insensitive matching for both file names and content. See oracle javadocs on
-       Pattern.html#special for details on java regex flags"]
+   MAX_WIDTH
+   [;; First three strings describe a short-option, long-option with optional
+    ;; example argument description, and a description. All three are optional
+    ;; and positional.
+    ["-p"
+     "--path <regex>"
+     "a pattern to match against the relative path (including file name) starting from search-root"
+     :parse-fn #(re-pattern %)]
+    ["-a"
+     "--apath <regex>"
+     "a pattern to match against the absolute path (including file name)"
+     :parse-fn #(re-pattern %)]
+    ["-n"
+     "--name <regex>"
+     "a pattern to match against file names"
+     :parse-fn #(re-pattern %)]
+    ["-g"
+     "--grep <regex>"
+     "a pattern to match against file content lines"
+     :parse-fn #(re-pattern %)]
+    ["-t"
+     (str "--types <" (file-type-selectors) ">")
+     (str "restrict the files searched to only the type(s) specified. "
+          "The list of supported file types is extensible. Available file types: "
+          (file-type-descriptions))
+     :default (default-file-type-exts)
+     :parse-fn parse-types
+     :validate [#(every? (comp not nil?) %) (str "type must be one of " (file-type-selectors))]]
+    ["-x"
+     "--context <#>"
+     "If -c is given, show <# of lines> lines of context around the match, defaults to 0"
+     :parse-fn #(Integer/parseInt %)]
+    ["-o"
+     "--out-file <path>"
+     "when using -c (cat file), write the contents of the located file(s) to the output file"
+     :parse-fn #(clojure.java.io/as-file %)]
+    ["-f"
+     "--flags <flags>"
+     "turns on regex flags for all matches used. Example: -f i turns on case insensitive matching for both file names and content. See oracle javadocs on
+      Pattern.html#special for details on java regex flags"]
 
-     ["-c"
-      "--cat"
-      "cat file. For matching files, print the entire file contents on the console"]
+    ["-c"
+     "--cat"
+     "cat file. For matching files, print the entire file contents on the console"]
 
-     ["-m"
-      "--monochrome"
-      "turn off ansi-coloring of matching content lines"]
+    ["-m"
+     "--monochrome"
+     "turn off ansi-coloring of matching content lines"]
 
-     ["-s" "--hash <algo>"
-      (str "calculate file hash(es) for matched files. Available algorithms: "
-           (hash-selectors))
-      :parse-fn parse-hash-desc
-      :assoc-fn (fn [m k v] (update-in m [k] #(into [] (conj % v))))
-      :validate [#(do
-                    (prn :validate %)
-                    (boolean %)) (str "hash must be one of " (hash-selectors) "!")]]
+    ["-s" "--hash <algo>"
+     (str "calculate file hash(es) for matched files. Available algorithms: "
+          (hash-selectors))
+     :parse-fn parse-hash-desc
+     :assoc-fn (fn [m k v] (update-in m [k] #(into [] (conj % v))))
+     :validate [#(do
+                   (prn :validate %)
+                   (boolean %)) (str "hash must be one of " (hash-selectors) "!")]]
 
-     ;["-n"
-     ; "--no-color"
-     ; "turn off ansi coloring of matches"]
+    [""
+     "--profile"
+     "internal developer option - enable profiling"]
 
-     ;["-m" "--md5" "print md5 hash of matched files"]
-     ;["-s" "--sha1" "print sha1 hash of matched files"]
-     ["-h"
-      "--help"
-      "show usage information"]]))
+    ;["-n"
+    ; "--no-color"
+    ; "turn off ansi coloring of matches"]
+
+    ;["-m" "--md5" "print md5 hash of matched files"]
+    ;["-s" "--sha1" "print sha1 hash of matched files"]
+    ["-h"
+     "--help"
+     "show usage information"]]))
 
 (defn usage [summary]
   (as-> [""
          "findjar - a tool for searching through files, including files inside jars"
          ""
-         "usage: findjar <search-root> [-n <name-pattern>] [-g <content-pattern>]  [...]"
+         "usage: findjar <search-root> [-p <path-pattern>] [-g <content-pattern>]  [...]"
          ""
-         "This script searches for files in any disk structure. It is capable of
-          looking inside jar/zip files for file names and also capable of looking for
-          file content inside the files which reside in the jar/zip files."
+         "findjar searches for files in any disk structure. It is capable of
+          looking both for/in normal files and also for/in files inside
+          zip/jar files. It is capable of regex matching both for file name/path
+          and for content within the files."
          ""
          "This tool is in essence an improvement of the unix find command
           geared towards solving a common problem for programmers on the JVM:
           finding that specific file or class in your maven repo, classpath, etc
-          when that file resides inside a jar archive."
+          when that file can reside either directly on disk or inside a jar archive."
          ""
          "Note that this tool is capable of a few extra tricks such as writing
           out the contents of matched files inside jar files and calculating
           md5 or sha1 hashes of matched files inside jar files."
+         ""
+         ""
+         "For regular files the path pattern (-p) matches against the entire path,"
+         "including the file name, i.e.:"
+         ""
+         "   ~> findjar ~/.m2 -p '.*asm/asm/3.2.*pom'"
+         ""
+         "   repository/asm/asm/3.2/asm-3.2.pom"
+         ""
+         "whereas for files within jar files, the path pattern matches the string:"
+         ""
+         "   <path-to-jar-file>@<path-within-jar-file>"
+         ""
+         "i.e:"
+         ""
+         "   ~> findjar ~/.m2 -p '.*asm/asm.*Edge.class'"
+         ""
+         "   repository/asm/asm/3.2/asm-3.2.jar@org/objectweb/asm/Edge.class"
          ""
          "Command line switches can be provided either using short form i.e. '-t j'
           or long form i.e. '--type j'."
@@ -250,23 +265,22 @@
   (System/exit status))
 
 (comment
-  ;; print opts in repl
-  (cli/parse-opts ["-h"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
+ ;; print opts in repl
+ (cli/parse-opts ["-h"]
+                 (cli-options)
+                 :strict true
+                 :summary-fn summarize)
 
-  ;; provide multiple hash algs
-  (cli/parse-opts ["-s" "sha1" "-s" "md5"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
+ ;; provide multiple hash algs
+ (cli/parse-opts ["-s" "sha1" "-s" "md5"]
+                 (cli-options)
+                 :strict true
+                 :summary-fn summarize)
 
-  ;; parse a real set of opts
-  (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
+ ;; parse a real set of opts
+ (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
+                 (cli-options)
+                 :strict true
+                 :summary-fn summarize)
 
-
-  )
+ )

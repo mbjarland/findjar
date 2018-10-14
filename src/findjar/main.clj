@@ -3,20 +3,20 @@
             [clojure.string :as str]
             [findjar.cli :as cli]
             [jansi-clj.core :as ansi]
-    ;[taoensso.tufte :as tufte :refer [p profiled profile defnp]]
+            [taoensso.tufte :refer [profile]]
             [clojure.java.io :as jio])
   (:gen-class)
   (:import (java.io LineNumberReader File)))
 
 (defn split-at-idxs [str idxs]
   (let [[r l _] (reduce
-                  (fn [[a s i] idx]
-                    (let [[t r] (split-at (- idx i) s)]
-                      [(conj a (str/join t))
-                       (str/join r)
-                       idx]))
-                  [[] str 0]
-                  idxs)]
+                 (fn [[a s i] idx]
+                   (let [[t r] (split-at (- idx i) s)]
+                     [(conj a (str/join t))
+                      (str/join r)
+                      idx]))
+                 [[] str 0]
+                 idxs)]
     (conj r l)))
 
 (defn highlight-matches [hit? line match-idxs hit-color-fn]
@@ -24,16 +24,46 @@
     line
     (let [tokens (split-at-idxs line (mapcat vals match-idxs))]
       (first
-        (reduce
-          (fn [[a h?] token]
-            [(str a (if h? (hit-color-fn token) token)) (not h?)])
-          ["" false]
-          tokens)))))
+       (reduce
+        (fn [[a h?] token]
+          [(str a (if h? (hit-color-fn token) token)) (not h?)])
+        ["" false]
+        tokens)))))
 
-(defn stream-line-count [stream-factory]
-  (with-open [r (LineNumberReader. (jio/reader (stream-factory)))]
-    (.skip r Long/MAX_VALUE)
-    (.getLineNumber r)))
+(defn stream-line-count [content-provider]
+  (content-provider
+   nil
+   (fn [reader]
+     (with-open [r (LineNumberReader. reader)]
+       (.skip r Long/MAX_VALUE)
+       (.getLineNumber r)))))
+
+(defn do-with-color [color? f]
+  (when color? (jansi-clj.core/enable!))
+  (f ())
+  (when color? jansi-clj.core/disable!))
+
+(defn content-string [content-provider path to-file?]
+  (content-provider
+   nil
+   (fn [reader]
+     (with-out-str
+       (when (not to-file?) (jansi-clj.core/enable!))
+
+       (println (ansi/red "<<<<<<<") path)
+       (let [max-n-len (count (str (stream-line-count content-provider)))
+             lines     (line-seq reader)]
+         (doseq [[n line] (map-indexed vector lines)]
+           (let [prefix (if to-file?
+                          ""
+                          (let [n-len (count (str (inc n)))
+                                p     (str/join (repeat (- max-n-len n-len) \space))]
+                            (str p (inc n))))]
+             (println (ansi/green prefix) (str/trim line)))))
+       (println (ansi/red ">>>>>>>"))
+
+       (when (not to-file?) (jansi-clj.core/disable!))))))
+
 
 (defn default-handler
   "returns an implementation of the FindJarHandler protocol. This moves all
@@ -42,7 +72,7 @@
   users of this code to modify the behavior by supplying their own handler"
   []
   (reify c/FindJarHandler
-    (warn [_ file type msg ex opts]
+    (warn [_ msg ex]
       (println "WARN:" msg))
 
     (match [_ path]
@@ -63,34 +93,27 @@
                       (highlight-matches hit? line match-idxs ansi/red)))))
 
 
-    (dump-stream [_ path stream-factory opts]
-      (let [^File of (:out-file opts)]
-        (if of
-          (do
-            (with-open [w (jio/writer of :append true)]
-              (.write w (str "<<<<<<< " path \newline))
-              (jio/copy (stream-factory) w)
-              (.write w (str ">>>>>>>" \newline)))
-            (println path ">>" (.getPath of)))
-          (with-open [reader (jio/reader (stream-factory))]
-            (println (ansi/red "<<<<<<<") path)
-            (let [k (count (str (stream-line-count stream-factory)))
-                  s (line-seq reader)]
-              (doseq [[n line] (map-indexed vector s)]
-                (let [j (count (str (inc n)))
-                      p (str/join (repeat (- k j) \space))]
-                  (println (ansi/green (str p (inc n))) (str/trim line)))))
-            (println (ansi/red ">>>>>>>"))))))
+    ;; TODO: rewrite the duality below
+    (dump-stream
+      [_ path content-provider opts]
+      (let [^File of (:out-file opts)
+            str      (content-string content-provider path (not (nil? of)))]
+        (with-open [w (jio/writer (or of System/out))]
+          (.write w str))
+        (when of (println path ">>" (.getPath of)))))
+
 
     (print-hash [_ path hash-type hash-value opts]
       (println hash-value path))))
+
+(taoensso.tufte/add-basic-println-handler! {})
 
 (defn -main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
         handler (default-handler)]
     (if exit-message
       (cli/exit (if ok? 0 1) exit-message)
-      (c/perform-file-scan search-root handler opts))))
+      (profile {:when (:profile opts)} (c/perform-file-scan search-root handler opts)))))
 
 (defn repl-main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
@@ -98,33 +121,51 @@
     (prn :opts opts)
     (if exit-message
       (println "would exit with code " (if ok? 0 1) "msg," exit-message)
-      (c/perform-file-scan search-root handler opts))))
+      (profile {:when (:profile opts)} (c/perform-file-scan search-root handler opts)))))
 
 (comment
 
-  (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
-             "-n" "GLOBAL.properties"
-             "-s" "sha1")
+ (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
+            "-n" "GLOBAL.properties"
+            ;"-s" "sha1"
+            "--profile")
 
-  (repl-main "."
-             "-n" "main.clj"
-             "-g" "main.clj")
 
-  ;; parse a real set of opts
-  (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
+ (repl-main "."
+            "-n" "main.clj"
+            "-g" "main.clj")
 
-  ;; profile a run 
-  (profiled
-    {}
-    (repl-main
-      "/home/mbjarland/projects/kpna/packages/ATG10.2/"
-      "-t" "j"
-      "-n" "xml$"
-      "-g" "login"
-      "-fi"
-      "-x" "2"))
+ ;; parse a real set of opts
+ (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
+                 (cli-options)
+                 :strict true
+                 :summary-fn summarize)
 
-  )
+ ;; profile a run
+ (profiled
+  {}
+  (repl-main
+   "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+   "-t" "j"
+   "-n" "xml$"
+   "-g" "login"
+   "-fi"
+   "-x" "2"))
+
+ (format-duration [duration]
+                  (let [periods [:year 365 :day 24 :hour 60 :minute 60 :second 60]
+                        total   (reduce (fn [a [_ p]] (* s p)) 1 periods)]
+                    (if (< duration 1)
+                      "now"
+                      (let [cf     (fn [[d p cs] [pn pc]] [(mod d p) (conj cs (/ p pc))])
+                            folder (fn [[s0 s1 r] p]
+                                     (match p
+                                            [_ 0] [s0 s1 r]
+                                            [n 1] [s1 ", " (str "1 " n s0 r)]
+                                            [n c] [s1 ", " (str c " " n s0 r)]))
+                            [_ _ components] (reduce cf [duration total '()] periods)
+
+                            [_ _ r] (reduce folder ["" " and " ""] components)]
+                        r))))
+
+ )

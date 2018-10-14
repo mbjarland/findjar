@@ -13,10 +13,16 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Leiningen: clojure-complete:0.2.4" level="project" />
+    <orderEntry type="library" name="Leiningen: com.taoensso/encore:2.94.0" level="project" />
+    <orderEntry type="library" name="Leiningen: com.taoensso/truss:1.5.0" level="project" />
+    <orderEntry type="library" name="Leiningen: com.taoensso/tufte:2.0.1" level="project" />
     <orderEntry type="library" name="Leiningen: jansi-clj:0.1.1" level="project" />
-    <orderEntry type="library" name="Leiningen: org.clojure/clojure:1.8.0" level="project" />
-    <orderEntry type="library" name="Leiningen: org.clojure/tools.cli:0.3.5" level="project" />
+    <orderEntry type="library" name="Leiningen: org.clojure/clojure:1.9.0" level="project" />
+    <orderEntry type="library" name="Leiningen: org.clojure/core.specs.alpha:0.1.24" level="project" />
+    <orderEntry type="library" name="Leiningen: org.clojure/spec.alpha:0.1.143" level="project" />
+    <orderEntry type="library" name="Leiningen: org.clojure/tools.cli:0.4.1" level="project" />
     <orderEntry type="library" name="Leiningen: org.clojure/tools.nrepl:0.2.12" level="project" />
+    <orderEntry type="library" name="Leiningen: org.clojure/tools.reader:1.2.1" level="project" />
     <orderEntry type="library" name="Leiningen: org.fusesource.jansi/jansi:1.16" level="project" />
     <orderEntry type="library" name="Leiningen: pandect:0.6.1" level="project" />
   </component>

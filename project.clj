@@ -3,11 +3,11 @@
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.8.0"]
-                 [org.clojure/tools.cli "0.3.5"]
+  :dependencies [[org.clojure/clojure "1.9.0"]
+                 [org.clojure/tools.cli "0.4.1"]
                  [pandect/pandect "0.6.1"]
                  [jansi-clj "0.1.1"]
-                 ;[com.taoensso/tufte "1.4.0"]
+                 [com.taoensso/tufte "2.0.1"]
                  ]
   :main findjar.main
   :aot [findjar.main]
