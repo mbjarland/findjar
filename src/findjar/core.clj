@@ -8,7 +8,8 @@
             )
   (:import (java.util.zip ZipFile ZipEntry)
            (java.io File)
-           [java.util Map])
+           [java.util Map]
+           [java.nio.file Path])
   (:gen-class))
 
 (defprotocol FindJarHandler
@@ -59,11 +60,15 @@
     meta-data for these hash operations. The last argument is a the full
     set of options used to start the file scan"))
 
-(defn relative-path [^File search-root ^File f]
+(defn relative-path2 [^File search-root ^File f]
   (subs
    (str/replace (.getCanonicalPath f)
                 (.getCanonicalPath search-root) "")
    1))
+
+(defn relative-path [^File search-root ^File f]
+  (subs (.getPath f) (inc (count (.getPath search-root)))))
+  ;(.toString (.relativize (.toPath search-root) (.toPath f))))
 
 (defn calculate-pandect-hash
   "internal function to calculate pandect hashes"
@@ -276,43 +281,46 @@
     (when (and (pos? i) (not (= (inc i) (count n))))
       (subs n (inc i)))))
 
-(defn valid-file-fn [opts handler]                          ;;TODO: use multimethod file type
-  (let [search-in-disk-files (some #{:default} (:types opts))
+(defn valid-file-fn [opts]                                  ;;TODO: use multimethod file type
+  (let [search-in-disk-files (boolean (some #{:default} (:types opts)))
         active-types         (:types opts)]                 ;types is a list [:default "jar" "zip"] etc
     (fn [^File f]
-      (p :0-check-valid-file
-         (when (p :0-valid-file-is-file (.isFile f))
-           (boolean
-            (or search-in-disk-files
-                (some #(and (string? %) (.endsWith (.getName f) %))
-                      active-types))))))))
+      (when (p :1-valid-file-is-file (.isFile f))
+        (boolean
+         (or search-in-disk-files
+             (some #(and (string? %) (.endsWith (.getName f) %))
+                   active-types)))))))
 
-(defmulti file-type-scanner
-          (fn [^File f] (file-ext f)))
+(defmulti file-finder
+          (fn [^File f]
+            (p :2-file-ext (file-ext f))))
 
-(defmethod file-type-scanner "jar"
+(defmethod file-finder "jar"
   [^File f]
   {:fn      (fn [path opts handler]
-              (find-in-jar f path opts handler))
+              (p :2-jar-file-finder
+                 (find-in-jar f path opts handler)))
    :desc    "files in jar files"
    :default true
    :char    \j})
 
-(defmethod file-type-scanner "zip"
+(defmethod file-finder "zip"
   [^File f]
   {:fn      (fn [path opts handler]
-              (find-in-jar f path opts handler))
+              (p :2-zip-file-finder
+                 (find-in-jar f path opts handler)))
    :desc    "files in zip files"
    :default false
    :char    \z})
 
-(defmethod file-type-scanner :default
+(defmethod file-finder :default
   [^File f]
   {:fn      (fn [path opts handler]
-              (let [file-name        (.getName f)
-                    stream-factory   #(jio/input-stream f)
-                    content-provider (make-content-provider stream-factory handler)]
-                (print-stream-matches opts file-name path content-provider handler)))
+              (p :2-disk-file-finder
+                 (let [file-name        (.getName f)
+                       stream-factory   #(jio/input-stream f)
+                       content-provider (make-content-provider stream-factory handler)]
+                   (print-stream-matches opts file-name path content-provider handler))))
    :desc    "files on disk"
    :default true
    :char    \d})
@@ -321,10 +329,11 @@
 ;;TODO: (:active-file-types opts) is a map of
 ;;TODO: active file types {"jar" blah "zip" blah}
 (defn find-in-file [^File root ^File f handler opts]
-  (let [path    (if (:apath opts) (.getCanonicalPath f)
-                                  (relative-path root f))
-        scanner (:fn (file-type-scanner f))]
-    (scanner path opts handler)))
+  (let [path   (p :2-calculate-path
+                  (if (:apath opts) (.getCanonicalPath f)
+                                    (relative-path root f)))
+        finder (p :2-resolve-finder-fn (:fn (file-finder f)))]
+    (p :2-call-finder-fn (finder path opts handler))))
 
 (defn munge-regexes [opts]
   (let [{:keys [flags name grep path apath]} opts]
@@ -340,12 +349,13 @@
          opts
          [:name :grep :path :apath])))))
 
-(defn perform-file-scan [search-root handler opts]
-  (let [default?    (some #{:default} (:types opts))
-        opts        (munge-regexes opts)
-        valid-file? (valid-file-fn opts handler)
-        files       (filter #(p :0-check-valid-file (valid-file? %))
+(defn perform-scan [search-root handler opts]
+  (p :0-perform-file-scan
+     (let [default? (some #{:default} (:types opts))
+           opts     (munge-regexes opts)
+           valid-fn (valid-file-fn opts)
+           files    (filter #(p :1-check-valid-file (valid-fn %))
                             (file-seq search-root))]
-    (doseq [f files]
-      (p :0-find-in-file (find-in-file search-root f handler opts)))))
+       (doseq [f files]
+         (p :1-find-in-file (find-in-file search-root f handler opts))))))
 

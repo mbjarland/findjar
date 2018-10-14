@@ -38,11 +38,6 @@
        (.skip r Long/MAX_VALUE)
        (.getLineNumber r)))))
 
-(defn do-with-color [color? f]
-  (when color? (jansi-clj.core/enable!))
-  (f ())
-  (when color? jansi-clj.core/disable!))
-
 (defn content-string [content-provider path to-file?]
   (content-provider
    nil
@@ -73,7 +68,7 @@
   []
   (reify c/FindJarHandler
     (warn [_ msg ex]
-      (println "WARN:" msg))
+      (println (ansi/red  (str "WARN:" msg))))
 
     (match [_ path]
       (println path))
@@ -110,21 +105,25 @@
 
 (defn -main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
-        handler (default-handler)]
-    (prn :opts opts)
+        handler (default-handler)
+        profile? (:profile opts)]
+    (prn :opts opts :profile profile?)
+    (when profile? (taoensso.tufte/add-basic-println-handler! {}))
     (if exit-message
       (cli/exit (if ok? 0 1) exit-message)
-      (profile {:when (:profile opts)} (c/perform-file-scan search-root handler opts)))))
+      (profile {:when profile?} (c/perform-scan search-root handler opts)))))
 
 (defn repl-main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
-        handler (default-handler)]
+        handler (default-handler)
+        profile? (:profile opts)]
     (prn :opts opts)
     (if exit-message
       (println "would exit with code " (if ok? 0 1) "msg," exit-message)
-      (profile {:when (:profile opts)} (c/perform-file-scan search-root handler opts)))))
+      (profile {:when profile?} (c/perform-scan search-root handler opts)))))
 
 (comment
+""""
 
  (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
             "-n" "GLOBAL.properties"

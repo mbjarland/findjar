@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
             [clojure.java.io :refer [file]])
-  (:gen-class))
+  (:gen-class)
+  (:import [java.nio.file Paths]))
 
 (def MAX_WIDTH 78)
 
@@ -38,7 +39,7 @@
                :default (:default v)
                :ext     k}))
    {}
-   (multimethod-meta c/file-type-scanner)))
+   (multimethod-meta c/file-finder)))
 
 (defn file-type-selectors []
   (str/join "|" (keys (file-types))))
@@ -256,7 +257,7 @@
       (and (:apath options)
            (:path options)) (fail "can not use path (-p) and apath (-a) together")
       errors {:exit-message (error-msg errors summary)}     ; errors => exit with description of errors
-      (valid-search-root? arguments) {:search-root (file (first arguments))
+      (valid-search-root? arguments) {:search-root  (file (first arguments))
                                       :opts        options}
       :else (fail "invalid search-root"))))                 ; failed custom validation => exit with usage summary
 
