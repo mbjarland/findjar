@@ -344,10 +344,8 @@
   (let [default?    (some #{:default} (:types opts))
         opts        (munge-regexes opts)
         valid-file? (valid-file-fn opts handler)
-        files       (filter #(p :0-find-valid-files
-                                (valid-file? %))
+        files       (filter #(p :0-check-valid-file (valid-file? %))
                             (file-seq search-root))]
-    (p :0-iterate-files
-       (doseq [f files]
-         (p :1-find-in-file (find-in-file search-root f handler opts))))))
+    (doseq [f files]
+      (p :0-find-in-file (find-in-file search-root f handler opts)))))
 

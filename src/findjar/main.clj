@@ -111,6 +111,7 @@
 (defn -main [& args]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
         handler (default-handler)]
+    (prn :opts opts)
     (if exit-message
       (cli/exit (if ok? 0 1) exit-message)
       (profile {:when (:profile opts)} (c/perform-file-scan search-root handler opts)))))
