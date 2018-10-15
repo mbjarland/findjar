@@ -4,12 +4,10 @@
             [pandect.algo.sha1 :refer [sha1]]
             [pandect.algo.md5 :refer [md5]]
             [pandect.algo.crc32 :refer [crc32]]
-            [taoensso.tufte :as tufte :refer [p profiled profile defnp]]
+            [taoensso.tufte :refer [p profiled profile defnp]]
             )
   (:import (java.util.zip ZipFile ZipEntry)
-           (java.io File)
-           [java.util Map]
-           [java.nio.file Path Files FileVisitOption LinkOption])
+           (java.io File))
   (:gen-class))
 
 (defprotocol FindJarHandler
@@ -17,7 +15,7 @@
   to the edges of the findjar code. We send in a handler
   into the findjar entry point and all side effecting things
   are then handled by the handler"
-  (warn [this msg ex]
+  (warn [this msg ex opts]
     "called on errors during file scan. First argument is a java '
     file object, second a keyword indicating error type, third a
     message describing the issue, and fourth the full set of options
@@ -60,10 +58,6 @@
     meta-data for these hash operations. The last argument is a the full
     set of options used to start the file scan"))
 
-; java.8
-(def no-follow-links
-  (into-array [LinkOption/NOFOLLOW_LINKS]))
-
 (defn relative-path2 [^File search-root ^File f]
   (subs
    (str/replace (.getCanonicalPath f)
@@ -72,7 +66,8 @@
 
 (defn relative-path [^Integer root-len ^File f]
   (subs (.getPath f) root-len))
-;(.toString (.relativize (.toPath search-root) (.toPath f))))
+; java.8
+; (.toString (.relativize (.toPath search-root) (.toPath f))))
 
 (defn calculate-pandect-hash
   "internal function to calculate pandect hashes"
@@ -244,7 +239,7 @@
       cat (dump-stream handler file-path content-provider opts)
       grep (grep-stream file-path content-provider handler opts))))
 
-(defn make-content-provider [stream-factory handler]
+(defn make-content-provider [stream-factory handler opts]
   (fn [stream-handler reader-handler]
     (let [rh (fn [stream]
                (with-open [reader (jio/reader stream)]
@@ -256,7 +251,7 @@
             stream-handler (stream-handler stream)
             reader-handler (rh stream)))
         (catch Exception e
-          (warn handler (.getMessage e) e)
+          (warn handler (.getMessage e) e opts)
           nil)))))
 
 
@@ -272,12 +267,13 @@
                 entry-name       (.getName (jio/file entry-path))
                 path             (str (str/trim path) "@" (str/trim entry-path))
                 stream-factory   #(.getInputStream zip entry)
-                content-provider (make-content-provider stream-factory handler)]
+                content-provider (make-content-provider stream-factory handler opts)]
             (print-stream-matches opts entry-name path content-provider handler))))
       (catch Exception e
         (warn handler
               (str (.getSimpleName (class e)) " opening " (.getPath jar) " - " (.getMessage e))
-              e)))))
+              e
+              opts)))))
 
 (defn file-ext [^File f]
   (let [n (.getName f)
@@ -323,7 +319,7 @@
               (p :2-disk-file-finder
                  (let [file-name        (.getName f)
                        stream-factory   #(jio/input-stream f)
-                       content-provider (make-content-provider stream-factory handler)]
+                       content-provider (make-content-provider stream-factory handler opts)]
                    (print-stream-matches opts file-name path content-provider handler))))
    :desc    "files on disk"
    :default true

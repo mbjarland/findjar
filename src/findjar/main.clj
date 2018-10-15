@@ -2,7 +2,8 @@
   (:require [findjar.core :as c]
             [clojure.string :as str]
             [findjar.cli :as cli]
-            [jansi-clj.auto :as ansi]
+            [jansi-clj.auto]
+            [jansi-clj.core :refer [red green]]
             [taoensso.tufte :refer [profile]]
             [clojure.java.io :as jio])
   (:gen-class)
@@ -19,16 +20,27 @@
                  idxs)]
     (conj r l)))
 
-(defn highlight-matches [hit? line match-idxs hit-color-fn]
+(def ^:dynamic *use-colors* true)
+
+(defn use-colors?
+  [opts]
+  (not (:monochrome opts)))
+
+(defn style
+  [color-fn str]
+  (if *use-colors* (color-fn str) str))
+
+(defn highlight-matches [hit? line match-idxs hit-color-fn opts]
   (if (not hit?)
     line
     (let [tokens (split-at-idxs line (mapcat vals match-idxs))]
-      (first
-       (reduce
-        (fn [[a h?] token]
-          [(str a (if h? (hit-color-fn token) token)) (not h?)])
-        ["" false]
-        tokens)))))
+      (binding [*use-colors* (use-colors? opts)]
+        (first
+         (reduce
+          (fn [[a h?] token]
+            [(str a (if h? (style hit-color-fn token) token)) (not h?)])
+          ["" false]
+          tokens))))))
 
 (defn stream-line-count [content-provider]
   (content-provider
@@ -38,28 +50,23 @@
        (.skip r Long/MAX_VALUE)
        (.getLineNumber r)))))
 
-(defn style [color-fn])
-(defn content-string [content-provider path to-file?]
+(defn content-string [content-provider path to-file? opts]
   (content-provider
    nil
    (fn [reader]
      (with-out-str
-       ;(when to-file? (jansi-clj.core/disable!))
-
-       (println (ansi/red "<<<<<<<") path)
-       (let [max-n-len (count (str (stream-line-count content-provider)))
-             lines     (line-seq reader)]
-         (doseq [[n line] (map-indexed vector lines)]
-           (let [prefix (if to-file?
-                          ""
-                          (let [n-len (count (str (inc n)))
-                                p     (str/join (repeat (- max-n-len n-len) \space))]
-                            (str p (inc n))))]
-             (println (str (ansi/green prefix) (str/trim line))))))
-       (println (ansi/red ">>>>>>>"))
-
-       ;(when to-file? (jansi-clj.core/enable!))
-       ))))
+       (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
+         (println (style red "<<<<<<<") path)
+         (let [max-n-len (count (str (stream-line-count content-provider)))
+               lines     (line-seq reader)]
+           (doseq [[n line] (map-indexed vector lines)]
+             (let [prefix (if to-file?
+                            ""
+                            (let [n-len (count (str (inc n)))
+                                  p     (str/join (repeat (- max-n-len n-len) \space))]
+                              (str p (inc n))))]
+               (println (str (style green prefix) (str/trim line))))))
+         (println (style red ">>>>>>>")))))))
 
 
 (defn default-handler
@@ -69,8 +76,9 @@
   users of this code to modify the behavior by supplying their own handler"
   []
   (reify c/FindJarHandler
-    (warn [_ msg ex]
-      (println (ansi/red (str "WARN:" msg))))
+    (warn [_ msg ex opts]
+      (binding [*use-colors* (use-colors? opts)]
+        (println (style red (str "WARN:" msg)))))
 
     (match [_ path]
       (println path))
@@ -87,48 +95,55 @@
                       (if (and (not hit?) context?) " " ":")
                       display-#
                       pad
-                      (highlight-matches hit? line match-idxs ansi/red)))))
+                      (highlight-matches hit? line match-idxs red opts)))))
 
     (dump-stream
       [_ path content-provider opts]
       (let [^File of (:out-file opts)
             to-file? (not (nil? of))
-            str      (content-string content-provider path to-file?)]
+            str      (content-string content-provider path to-file? opts)]
+        ;(binding [*out* *err*]
+        ;  (prn :strlen (count str) :f path))
         (when str                                           ;str is nil if there was an issue reading file
           (if to-file?
             (with-open [w (jio/writer of :append true)]
               (.write w str)
               (println path ">>" (.getPath of)))
-            (print str)))))
+            (println str)))))
 
     (print-hash [_ path hash-type hash-value opts]
       (println hash-value path))))
 
 (taoensso.tufte/add-basic-println-handler! {})
 
-(defn main-handler [do-exit? [& args]]
+(defn main-entrypoint [hard-exit-on-errors? [& args]]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
         handler  (default-handler)
         profile? (:profile opts)]
-    (when profile? (prn :do-exit? do-exit? :opts opts))
+    (when profile? (prn :do-exit? hard-exit-on-errors? :opts opts))
     (if exit-message
-      (if do-exit?
+      (if hard-exit-on-errors?
         (cli/exit (if ok? 0 1) exit-message)
         (println "would exit with code " (if ok? 0 1) "msg," exit-message))
       (profile {:when profile?} (c/perform-scan search-root handler opts)))))
 
 (defn -main [& args]
-  (main-handler true args))
+  (main-entrypoint true args))
 
 (defn repl-main [& args]
-  (main-handler false args))
+  (main-entrypoint false args))
 
 (comment
  "" ""
 
+ (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+            "-n" "GLOBAL.properties"
+            "-g" "logging"
+            "--profile")
+
  (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
             "-n" "GLOBAL.properties"
-            ;"-s" "sha1"
+            "-c"
             "--profile")
 
 
