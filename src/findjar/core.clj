@@ -227,17 +227,19 @@
    handler implementing the protocol defined above and executes
    searches based on the provided data"
   [opts file-name file-path content-provider handler]
-  (let [{:keys [name grep path apath cat hash]} opts
-        macro-op (or cat hash)]
-    (cond
-      (and name (not (re-find name file-name))) nil         ; no name match -> exit
-      (and path (not (re-find path file-path))) nil         ; no path match -> exit
-      (and apath (not (re-find apath file-path))) nil       ; no apath match -> exit
-      (not (or macro-op grep)) (match handler file-path)    ; normal non-grep match
-      (and grep macro-op (not (stream-line-matches? content-provider grep))) nil ;grep+macro and no matches -> nil
-      hash (calculate-hashes file-path content-provider hash handler opts)
-      cat (dump-stream handler file-path content-provider opts)
-      grep (grep-stream file-path content-provider handler opts))))
+  (p :4.1-print-stream-matches
+     (let [{:keys [name grep path apath cat hash]} opts
+           macro-op (or cat hash)]
+       (p :4.2-print-stream-matches
+          (cond
+            (and name (not (re-find name file-name))) nil   ; no name match -> exit
+            (and path (not (re-find path file-path))) nil   ; no path match -> exit
+            (and apath (not (re-find apath file-path))) nil ; no apath match -> exit
+            (not (or macro-op grep)) (match handler file-path) ; normal non-grep match
+            (and grep macro-op (not (stream-line-matches? content-provider grep))) nil ;grep+macro and no matches -> nil
+            hash (calculate-hashes file-path content-provider hash handler opts)
+            cat (dump-stream handler file-path content-provider opts)
+            grep (grep-stream file-path content-provider handler opts))))))
 
 (defn make-content-provider [stream-factory handler opts]
   (fn [stream-handler reader-handler]
@@ -254,26 +256,37 @@
           (warn handler (.getMessage e) e opts)
           nil)))))
 
+(def ^Integer slash (int \/))
+
+(defn get-name-part
+  "get the name part of a slash delimited path, e.g.
+  given a/b/c.txt, return c.txt"
+  [^String path]
+  (let [i (.lastIndexOf path slash)]
+    (if (= i -1) path
+                 (subs path i))))
 
 ; TODO: make this a multi-method to enables more file formats
 ; TODO: make -type accept a set to support "-t fjg" for files, jar files, gzip files etc
 (defn find-in-jar
-  [jar path opts handler]
+  [^File jar ^String path opts handler]
   (when (pos? (.length jar))
-    (try
-      (with-open [^ZipFile zip (ZipFile. ^File jar)]
-        (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
-          (let [entry-path       (.getName entry)
-                entry-name       (.getName (jio/file entry-path))
-                path             (str (str/trim path) "@" (str/trim entry-path))
-                stream-factory   #(.getInputStream zip entry)
-                content-provider (make-content-provider stream-factory handler opts)]
-            (print-stream-matches opts entry-name path content-provider handler))))
-      (catch Exception e
-        (warn handler
-              (str (.getSimpleName (class e)) " opening " (.getPath jar) " - " (.getMessage e))
-              e
-              opts)))))
+    (let [prefix (str (str/trim path) \@)]
+      (try
+        (with-open [^ZipFile zip (ZipFile. ^File jar)]
+          (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
+            (p :3-find-in-jar-in-seq
+               (let [entry-path       (p :3.1-get-name (.getName entry))
+                     entry-name       (p :3.2-get-name (get-name-part entry-path)) ;(.getName (jio/file entry-path)))
+                     jar-path         (p :3.3-get-path (.toString (.append (StringBuilder. prefix) entry-path))) ; (str prefix entry-path))
+                     stream-factory   (p :3.4-stream #(.getInputStream zip entry))
+                     content-provider (p :3.5-content-p (make-content-provider stream-factory handler opts))]
+                 (p :3.6-print-stream-matches (print-stream-matches opts entry-name jar-path content-provider handler))))))
+        (catch Exception e
+          (warn handler
+                (str (.getSimpleName (class e)) " opening " (.getPath jar) " - " (.getMessage e))
+                e
+                opts))))))
 
 (defn file-ext [^File f]
   (let [n (.getName f)
@@ -341,17 +354,17 @@
          [:name :grep :path :apath])))))
 
 (defn perform-scan [search-root handler opts]
-     (let [opts      (p :1-munge-regexes (munge-regexes opts))
-           valid-fn  (valid-file-fn opts)
-           files     (filter #(p :1-check-valid-file (valid-fn %))
-                             (file-seq search-root))
-           root-len  (inc (count (.getPath search-root)))
-           absolute? (:apath opts)
-           to-path   (fn [^File f]
-                       (p :2-calculate-path
-                          (if absolute? (.getCanonicalPath f)
-                                        (subs (.getPath f) root-len))))]
-          (doseq [f files]
-            (let [finder (p :2-resolve-finder-fn (:fn (file-finder f)))
-                  path   (to-path f)]
-              (p :1-call-finder-fn (finder path opts handler))))))
+  (let [opts      (p :1-munge-regexes (munge-regexes opts))
+        valid-fn  (valid-file-fn opts)
+        files     (filter #(p :1-check-valid-file (valid-fn %))
+                          (file-seq search-root))
+        root-len  (inc (count (.getPath search-root)))
+        absolute? (:apath opts)
+        to-path   (fn [^File f]
+                    (p :2-calculate-path
+                       (if absolute? (.getCanonicalPath f)
+                                     (subs (.getPath f) root-len))))]
+    (doseq [f files]
+      (let [finder (p :2-resolve-finder-fn (:fn (file-finder f)))
+            path   (to-path f)]
+        (p :1-call-finder-fn (finder path opts handler))))))

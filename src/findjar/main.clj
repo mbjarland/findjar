@@ -125,7 +125,7 @@
       (if hard-exit-on-errors?
         (cli/exit (if ok? 0 1) exit-message)
         (println "would exit with code " (if ok? 0 1) "msg," exit-message))
-      (profile {:when profile?} (c/perform-scan search-root handler opts)))))
+      (profile {:when profile? :nmax 10e7} (c/perform-scan search-root handler opts)))))
 
 (defn -main [& args]
   (main-entrypoint true args))
