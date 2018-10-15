@@ -9,7 +9,7 @@
   (:import (java.util.zip ZipFile ZipEntry)
            (java.io File)
            [java.util Map]
-           [java.nio.file Path])
+           [java.nio.file Path Files FileVisitOption LinkOption])
   (:gen-class))
 
 (defprotocol FindJarHandler
@@ -60,15 +60,19 @@
     meta-data for these hash operations. The last argument is a the full
     set of options used to start the file scan"))
 
+; java.8
+(def no-follow-links
+  (into-array [LinkOption/NOFOLLOW_LINKS]))
+
 (defn relative-path2 [^File search-root ^File f]
   (subs
    (str/replace (.getCanonicalPath f)
                 (.getCanonicalPath search-root) "")
    1))
 
-(defn relative-path [^File search-root ^File f]
-  (subs (.getPath f) (inc (count (.getPath search-root)))))
-  ;(.toString (.relativize (.toPath search-root) (.toPath f))))
+(defn relative-path [^Integer root-len ^File f]
+  (subs (.getPath f) root-len))
+;(.toString (.relativize (.toPath search-root) (.toPath f))))
 
 (defn calculate-pandect-hash
   "internal function to calculate pandect hashes"
@@ -285,7 +289,7 @@
   (let [search-in-disk-files (boolean (some #{:default} (:types opts)))
         active-types         (:types opts)]                 ;types is a list [:default "jar" "zip"] etc
     (fn [^File f]
-      (when (p :1-valid-file-is-file (.isFile f))
+      (when (p :1.1-valid-file-is-file (.isFile f))
         (boolean
          (or search-in-disk-files
              (some #(and (string? %) (.endsWith (.getName f) %))
@@ -297,7 +301,7 @@
 
 (defmethod file-finder "jar"
   [^File f]
-  {:fn      (fn [path opts handler]
+  {:fn      (fn [^String path opts handler]
               (p :2-jar-file-finder
                  (find-in-jar f path opts handler)))
    :desc    "files in jar files"
@@ -306,7 +310,7 @@
 
 (defmethod file-finder "zip"
   [^File f]
-  {:fn      (fn [path opts handler]
+  {:fn      (fn [^String path opts handler]
               (p :2-zip-file-finder
                  (find-in-jar f path opts handler)))
    :desc    "files in zip files"
@@ -315,7 +319,7 @@
 
 (defmethod file-finder :default
   [^File f]
-  {:fn      (fn [path opts handler]
+  {:fn      (fn [^String path opts handler]
               (p :2-disk-file-finder
                  (let [file-name        (.getName f)
                        stream-factory   #(jio/input-stream f)
@@ -325,15 +329,6 @@
    :default true
    :char    \d})
 
-
-;;TODO: (:active-file-types opts) is a map of
-;;TODO: active file types {"jar" blah "zip" blah}
-(defn find-in-file [^File root ^File f handler opts]
-  (let [path   (p :2-calculate-path
-                  (if (:apath opts) (.getCanonicalPath f)
-                                    (relative-path root f)))
-        finder (p :2-resolve-finder-fn (:fn (file-finder f)))]
-    (p :2-call-finder-fn (finder path opts handler))))
 
 (defn munge-regexes [opts]
   (let [{:keys [flags name grep path apath]} opts]
@@ -350,12 +345,17 @@
          [:name :grep :path :apath])))))
 
 (defn perform-scan [search-root handler opts]
-  (p :0-perform-file-scan
-     (let [default? (some #{:default} (:types opts))
-           opts     (munge-regexes opts)
-           valid-fn (valid-file-fn opts)
-           files    (filter #(p :1-check-valid-file (valid-fn %))
-                            (file-seq search-root))]
-       (doseq [f files]
-         (p :1-find-in-file (find-in-file search-root f handler opts))))))
-
+     (let [opts      (p :1-munge-regexes (munge-regexes opts))
+           valid-fn  (valid-file-fn opts)
+           files     (filter #(p :1-check-valid-file (valid-fn %))
+                             (file-seq search-root))
+           root-len  (inc (count (.getPath search-root)))
+           absolute? (:apath opts)
+           to-path   (fn [^File f]
+                       (p :2-calculate-path
+                          (if absolute? (.getCanonicalPath f)
+                                        (subs (.getPath f) root-len))))]
+          (doseq [f files]
+            (let [finder (p :2-resolve-finder-fn (:fn (file-finder f)))
+                  path   (to-path f)]
+              (p :1-call-finder-fn (finder path opts handler))))))
