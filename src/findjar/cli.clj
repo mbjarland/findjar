@@ -258,7 +258,7 @@
          "  4. same as above, but include one surrounding line of \"context\""
          "     when printing the matching lines:"
          ""
-         "     ~> findjar clojure/1.9.0 -n \"clj\" -g \"Rich Hickey\" -t j -x 2"
+         "     ~> findjar clojure/1.9.0 -n \"clj\" -g \"Rich Hickey\" -t j -x 1"
          ""
          "     .../clojure-1.9.0.jar@clojure/set.clj 9  (ns ^{:doc \"Set operations..."
          "     .../clojure-1.9.0.jar@clojure/set.clj:10        :author \"Rich Hickey\"}"
