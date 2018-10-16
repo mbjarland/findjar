@@ -4,8 +4,7 @@
             [pandect.algo.sha1 :refer [sha1]]
             [pandect.algo.md5 :refer [md5]]
             [pandect.algo.crc32 :refer [crc32]]
-            [taoensso.tufte :refer [p profiled profile defnp]]
-            )
+            [taoensso.tufte :refer [p profile]])
   (:import (java.util.zip ZipFile ZipEntry)
            (java.io File))
   (:gen-class))
@@ -20,7 +19,7 @@
     file object, second a keyword indicating error type, third a
     message describing the issue, and fourth the full set of options
     used to start the file scan")
-  (match [this path]
+  (match [this path opts]
     "called when a normal (as in a non-grep) file name/path match
     is encountered")
   (grep-match [this max-line-# line-map opts]
@@ -58,16 +57,9 @@
     meta-data for these hash operations. The last argument is a the full
     set of options used to start the file scan"))
 
-(defn relative-path2 [^File search-root ^File f]
-  (subs
-   (str/replace (.getCanonicalPath f)
-                (.getCanonicalPath search-root) "")
-   1))
-
-(defn relative-path [^Integer root-len ^File f]
-  (subs (.getPath f) root-len))
 ; java.8
-; (.toString (.relativize (.toPath search-root) (.toPath f))))
+; (defn relative-path [^File search-root ^File f]
+;   (.toString (.relativize (.toPath search-root) (.toPath f))))
 
 (defn calculate-pandect-hash
   "internal function to calculate pandect hashes"
@@ -91,7 +83,9 @@
            (calculate-pandect-hash crc32 content-provider))
    :desc "crc32"})
 
-(defn match-idxs [pattern str]
+(defn match-idxs
+  ""
+  [pattern str]
   (let [matcher (re-matcher pattern str)]
     (loop [r nil]
       (if (re-find matcher)
@@ -202,12 +196,8 @@
            (doseq [line-map (sort-by :line-# uniques)]
              (grep-match handler max-line-# line-map opts))))))))
 
-(defn stream-line-matches2? [stream-factory pattern]
-  (with-open [stream (stream-factory)]
-    (let [reader (jio/reader stream)]
-      (some (fn [line] (re-find pattern line)) (line-seq reader)))))
-
-(defn stream-line-matches? [content-provider pattern]
+(defn stream-line-matches?
+  [content-provider pattern]
   (content-provider
    nil
    (fn [reader]
@@ -235,7 +225,7 @@
             (and name (not (re-find name file-name))) nil   ; no name match -> exit
             (and path (not (re-find path file-path))) nil   ; no path match -> exit
             (and apath (not (re-find apath file-path))) nil ; no apath match -> exit
-            (not (or macro-op grep)) (match handler file-path) ; normal non-grep match
+            (not (or macro-op grep)) (match handler file-path opts) ; normal non-grep match
             (and grep macro-op (not (stream-line-matches? content-provider grep))) nil ;grep+macro and no matches -> nil
             hash (calculate-hashes file-path content-provider hash handler opts)
             cat (dump-stream handler file-path content-provider opts)

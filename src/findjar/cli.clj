@@ -149,14 +149,13 @@
           (hash-selectors))
      :parse-fn parse-hash-desc
      :assoc-fn (fn [m k v] (update-in m [k] #(into [] (conj % v))))
-     :validate [#(do
-                   (prn :validate %)
-                   (boolean %)) (str "hash must be one of " (hash-selectors) "!")]]
+     :validate [#(boolean %) (str "hash must be one of " (hash-selectors) "!")]]
 
-    [""
-     "--profile"
+    [nil "--profile"
      "internal developer option - enable profiling"]
 
+    [nil "--examples"
+     "print out usage examples"]
     ;["-n"
     ; "--no-color"
     ; "turn off ansi coloring of matches"]
@@ -187,7 +186,6 @@
           out the contents of matched files inside jar files and calculating
           md5 or sha1 hashes of matched files inside jar files."
          ""
-         ""
          "For regular files the path pattern (-p) matches against the entire path,"
          "including the file name, i.e.:"
          ""
@@ -208,11 +206,128 @@
          "Command line switches can be provided either using short form i.e. '-t j'
           or long form i.e. '--type j'."
          ""
-         "Options:"] lines
+         "For usage examples, run: ~> findjar --examples"
+         ""
+         "Options:"]
+        lines
         (map un-whitespace lines)
         (map #(wrap-line MAX_WIDTH %) lines)
         (str/join \newline lines)
         (str lines "\n" summary "\n")))
+
+(defn examples []
+  ;;TODO: conditionally jansi color code example results
+  (as-> ["Examples:"
+         "(some paths etc have been omitted/abbreviated for brevity)"
+         ""
+         "  1. list all files in maven cache (~/.m2), both directly on disk and "
+         "     within jar files:"
+         ""
+         "     ~> findjar ~/.m2"
+         ""
+         "     .../1.6.1/nightlight-1.6.1.pom"
+         "     .../1.6.1/nightlight-1.6.1.jar.sha1"
+         "     .../1.6.1/nightlight-1.6.1.jar@META-INF/.../nightlight/pom.properties"
+         "     ..."
+         ""
+         "  2. list all files where file name matches pattern, both directly on disk"
+         "     and within jar files:"
+         ""
+         "     ~> findjar ~/.m2 -n \"string.clj\""
+         ""
+         "     .../clojure-1.9.0.jar@clojure/string.clj"
+         "     .../clojure-1.7.0.jar@clojure/string.clj"
+         "     .../clojure-1.8.0.jar@clojure/string.clj"
+         "     ...octet-1.1.0.jar@octet/spec/string.cljc"
+         "     ..."
+         ""
+         "  3. list all files where both file name (-n) and a line in the file "
+         "     content (-g) matches pattern. Print out matching lines with line "
+         "     numbers, highlight intra-line content matches. Search only files "
+         "     within jar files (ignore normal, directly on disk files):"
+         ""
+         "     ~> findjar clojure/1.9.0 -n \"clj\" -g \"author.*Rich Hickey\""
+         ""
+         "     .../clojure-1.9.0.jar@clojure/set.clj:10       :author \"Rich Hickey\"}"
+         "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :author \"Rich Hickey\"}"
+         "     .../clojure-1.9.0.jar@clojure/inspector.clj:10  :author \"Rich Hickey\"}"
+         "     .../clojure-1.9.0.jar@clojure/xml.clj:10       :author \"Rich Hickey\"}"
+         "     ..."
+         "    (with the matched string highlighted)"
+         ""
+         "  4. same as above, but include one surrounding line of \"context\""
+         "     when printing the matching lines:"
+         ""
+         "     ~> findjar clojure/1.9.0 -n \"clj\" -g \"Rich Hickey\" -t j -x 2"
+         ""
+         "     .../clojure-1.9.0.jar@clojure/set.clj 9  (ns ^{:doc \"Set operations..."
+         "     .../clojure-1.9.0.jar@clojure/set.clj:10        :author \"Rich Hickey\"}"
+         "     .../clojure-1.9.0.jar@clojure/set.clj 11        clojure.set)"
+         "     .../clojure-1.9.0.jar@clojure/zip.clj 13   and enumeration.  See Huet"
+         "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :author \"Rich Hickey\"}"
+         "     .../clojure-1.9.0.jar@clojure/zip.clj 15   clojure.zip"
+         "     ..."
+         "    (with the matched string highlighted)"
+         ""
+         "  5. find all files where name matches pattern and dump them on stdout, "
+         "     search both directly on disk and within jar files:"
+         ""
+         "     ~> findjar clojure/1.9.0 -n \"MANIFEST.MF\" -c"
+         ""
+         "     <<<<<<< clojure-1.9.0.jar@META-INF/MANIFEST.MF"
+         "     1 Manifest-Version: 1.0"
+         "     2 Archiver-Version: Plexus Archiver"
+         "     3 Created-By: Apache Maven"
+         "     4 Built-By: jenkins"
+         "     5 Build-Jdk: 1.7.0"
+         "     6 Main-Class: clojure.main"
+         "     7"
+         "     >>>>>>>"
+         ""
+         "  6. find all files where content matches pattern and dump them on stdout, "
+         "     intra-line highlight the matching content lines, search both directly "
+         "     on disk and within jar files:"
+         ""
+         "     ~> findjar clojure/1.9.0 -g \"Plexus\" -c"
+         ""
+         "     <<<<<<< clojure-1.9.0.jar@META-INF/MANIFEST.MF"
+         "     1 Manifest-Version: 1.0"
+         "     2 Archiver-Version: Plexus Archiver"
+         "     3 Created-By: Apache Maven"
+         "     4 Built-By: jenkins"
+         "     5 Build-Jdk: 1.7.0"
+         "     6 Main-Class: clojure.main"
+         "     7"
+         "     >>>>>>>"
+         "    (with the word \"Plexus\" on line 2 highlighted)"
+         ""
+         "  7. find all files both file name and content matches pattern and dump, "
+         "     them on stdout:"
+         ""
+         "     ~> findjar clojure/1.9.0 -n \"properties\" -g \"groupId\" -c"
+         ""
+         "     <<<<<<< clojure-1.9.0.jar@META-INF/...clojure/pom.properties"
+         "     1 #Generated by Maven"
+         "     2 #Fri Dec 08 08:01:54 CST 2017"
+         "     3 version=1.9.0"
+         "     4 groupId=org.clojure"
+         "     5 artifactId=clojure"
+         "     >>>>>>>"
+         "    (with the word \"groupId\" on line 4 highlighted)"
+         ""
+         "  8. find all files where name matches pattern and calculate both "
+         "     an sha1 and an md5 hash them:"
+         ""
+         "     ~> findjar clojure/1.9.0 -n \"clj\" -s sha1 -s md5"
+         ""
+         "     ...94a86681b58d556f1eb13a clojure-1.9.0.jar@clojure/string.clj"
+         "     ...f05f65fa44628a95497032 clojure-1.9.0.jar@clojure/set.clj"
+         "     ...7444756fa91b65 clojure-1.9.0.jar@clojure/string.clj"
+         "     ...95aaa8c6e9af74 clojure-1.9.0.jar@clojure/set.clj"
+         ""]
+        lines
+        ;(map #(wrap-line MAX_WIDTH %) lines)
+        (str/join \newline lines)))
 
 (defn error-msg [errors summary]
   (str (usage summary)
@@ -251,13 +366,14 @@
         {:keys [options arguments errors summary]} parsed
         fail   (fn [msg] {:exit-message (error-msg [msg] summary)})]
     (cond
+      (:examples options) {:exit-message (examples) :ok? true} ; examples => exit OK with examples
       (:help options) {:exit-message (usage summary) :ok? true} ; help => exit OK with usage summary
       (and (:out-file options)
            (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
       (and (:apath options)
            (:path options)) (fail "can not use path (-p) and apath (-a) together")
       errors {:exit-message (error-msg errors summary)}     ; errors => exit with description of errors
-      (valid-search-root? arguments) {:search-root  (file (first arguments))
+      (valid-search-root? arguments) {:search-root (file (first arguments))
                                       :opts        options}
       :else (fail "invalid search-root"))))                 ; failed custom validation => exit with usage summary
 
