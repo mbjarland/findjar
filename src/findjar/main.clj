@@ -45,13 +45,12 @@
   (if (not hit?)
     line
     (let [tokens (split-at-idxs line (mapcat vals match-idxs))]
-      (binding [*use-colors* (use-colors? opts)]            ;; TODO: move this binding up a level
-        (first
-         (reduce
-          (fn [[a h?] token]
-            [(str a (if h? (style hit-color-fn token) token)) (not h?)])
-          ["" false]
-          tokens))))))
+      (first
+       (reduce
+        (fn [[a h?] token]
+          [(str a (if h? (style hit-color-fn token) token)) (not h?)])
+        ["" false]
+        tokens)))))
 
 (defn content-line-count
   "returns number of lines in a content item"
@@ -113,11 +112,12 @@
             max       (count (str max-line-#))
             len       (count (str display-#))
             pad       (str/join (repeat (inc (- max len)) \space))]
-        (println (str (str/trim path)
-                      (if (and (not hit?) context?) " " ":")
-                      display-#
-                      pad
-                      (highlight-matches hit? line match-idxs red opts)))))
+        (binding [*use-colors* (use-colors? opts)]
+          (println (str (str/trim path)
+                        (if (and (not hit?) context?) " " ":")
+                        display-#
+                        pad
+                        (highlight-matches hit? line match-idxs red opts))))))
 
     (dump-stream
       [_ path content-provider opts]
