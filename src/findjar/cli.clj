@@ -69,8 +69,10 @@
   (let [words (str/split line #" ")]
     (clojure.pprint/cl-format nil (str "~{~<~%~1," (dec width) ":;~A~> ~}") words)))
 
-(defn un-whitespace [str]
-  (str/replace str #"\s+" " "))
+(defn un-whitespace [line]
+  (if (.endsWith line "=")
+    (subs line 0 (dec (count line)))
+    (str/replace line #"\s+" " ")))
 
 (defn wrap-desc [width margin desc]
   (let [line    (un-whitespace desc)
@@ -229,13 +231,13 @@
          "For usage examples, run: ~> findjar --examples"
          ""
          "Author: Matias Bjarland / matias@iteego.com"
-         "        Copyright (c) 2018 - Iteego AB"
+         "        Copyright (c) 2018 - Iteego AB="
          ""
          (str "findjar " (version-string))
          ""
          "Options:"]
         lines
-        ;(map un-whitespace lines)
+        (map un-whitespace lines)
         (map #(wrap-line MAX_WIDTH %) lines)
         (str/join \newline lines)
         (str lines "\n" summary "\n")))
