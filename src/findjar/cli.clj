@@ -107,7 +107,7 @@
           timestamp (or timestamp (/ (System/currentTimeMillis) 1000))
           format    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
           date      (.format format (Date. ^Long (* timestamp 1000)))]
-      (str ref-short " " date))))
+      (str "1.0.2" " - " ref-short " - " date))))
 
 (defn cli-options []
   (reformat-options
@@ -224,7 +224,10 @@
          ""
          "For usage examples, run: ~> findjar --examples"
          ""
-         (str "Matias Bjarland - " (version-string))
+         "Author: Matias Bjarland / matias@iteego.com"
+         "        Copyright (c) 2018 - Iteego AB"
+         ""
+         (str "findjar " (version-string))
          ""
          "Options:"]
         lines
