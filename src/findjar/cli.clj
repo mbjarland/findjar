@@ -100,14 +100,18 @@
   (let [m (file-types)]
     (map #(:ext (get m %)) types)))
 
+(def project-version "1.0.2") ;; TODO: pull this from project.clj
+
 (defn version-string []
-  (with-open [io-reader (jio/reader (jio/resource "build/version.edn"))
+
+  (with-open [io-reader (jio/reader (or (jio/resource "build/version.edn")
+                                        (jio/file "gen-resources/build/version.edn")))
               pb-reader (PushbackReader. io-reader)]
     (let [{:keys [timestamp ref-short]} (edn/read pb-reader)
           timestamp (or timestamp (/ (System/currentTimeMillis) 1000))
           format    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
           date      (.format format (Date. ^Long (* timestamp 1000)))]
-      (str "1.0.2" " - " ref-short " - " date))))
+      (str project-version " - " ref-short " - " date))))
 
 (defn cli-options []
   (reformat-options
@@ -231,7 +235,7 @@
          ""
          "Options:"]
         lines
-        (map un-whitespace lines)
+        ;(map un-whitespace lines)
         (map #(wrap-line MAX_WIDTH %) lines)
         (str/join \newline lines)
         (str lines "\n" summary "\n")))
