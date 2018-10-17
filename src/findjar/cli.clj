@@ -4,9 +4,14 @@
             [clojure.tools.cli :as cli]
             [clojure.java.io :refer [file]]
             [jansi-clj.auto]
-            [jansi-clj.core :as ansi])
+            [jansi-clj.core :as ansi]
+            [clojure.java.io :as jio]
+            [clojure.edn :as edn])
   (:gen-class)
-  (:import [java.nio.file Paths]))
+  (:import [java.nio.file Paths]
+           [java.io PushbackReader]
+           [java.text SimpleDateFormat]
+           [java.util Date]))
 
 (def MAX_WIDTH 78)
 
@@ -94,6 +99,15 @@
 (defn parse-types [types]
   (let [m (file-types)]
     (map #(:ext (get m %)) types)))
+
+(defn version-string []
+  (with-open [io-reader (jio/reader (jio/resource "build/version.edn"))
+              pb-reader (PushbackReader. io-reader)]
+    (let [{:keys [timestamp ref-short]} (edn/read pb-reader)
+          timestamp (or timestamp (/ (System/currentTimeMillis) 1000))
+          format    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
+          date      (.format format (Date. ^Long (* timestamp 1000)))]
+      (str ref-short " " date))))
 
 (defn cli-options []
   (reformat-options
@@ -209,6 +223,8 @@
           or long form i.e. '--type j'."
          ""
          "For usage examples, run: ~> findjar --examples"
+         ""
+         (str "Matias Bjarland - " (version-string))
          ""
          "Options:"]
         lines
