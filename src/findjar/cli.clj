@@ -106,12 +106,12 @@
   (with-open [io-reader (jio/reader (or (jio/resource "build/version.edn")
                                         (jio/file "gen-resources/build/version.edn")))
               pb-reader (PushbackReader. io-reader)]
-    (let [{:keys [timestamp ref-short]} (edn/read pb-reader)
+    (let [{:keys [timestamp ref-short dirty?]} (edn/read pb-reader)
           dev-timestamp (str (Math/round ^Double (/ (System/currentTimeMillis) 1000.0)))
           timestamp (Long/parseLong (or timestamp dev-timestamp))
           format    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
           date      (.format format (Date. ^Long (* timestamp 1000)))]
-      (str project-version " - " ref-short " - " date))))
+      (str project-version " - " ref-short " - " date (if dirty? " +" "")))))
 
 (defn cli-options []
   (reformat-options
