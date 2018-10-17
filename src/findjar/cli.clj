@@ -103,12 +103,12 @@
 (def project-version "1.0.2") ;; TODO: pull this from project.clj
 
 (defn version-string []
-
   (with-open [io-reader (jio/reader (or (jio/resource "build/version.edn")
                                         (jio/file "gen-resources/build/version.edn")))
               pb-reader (PushbackReader. io-reader)]
     (let [{:keys [timestamp ref-short]} (edn/read pb-reader)
-          timestamp (or timestamp (/ (System/currentTimeMillis) 1000))
+          dev-timestamp (str (Math/round ^Double (/ (System/currentTimeMillis) 1000.0)))
+          timestamp (Long/parseLong (or timestamp dev-timestamp))
           format    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
           date      (.format format (Date. ^Long (* timestamp 1000)))]
       (str project-version " - " ref-short " - " date))))
