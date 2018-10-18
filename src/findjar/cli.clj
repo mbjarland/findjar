@@ -102,7 +102,7 @@
   (let [m (file-types)]
     (map #(:ext (get m %)) types)))
 
-(def project-version "1.0.2") ;; TODO: pull this from project.clj
+(def project-version "1.0.2")                               ;; TODO: pull this from project.clj
 
 (defn version-string []
   (with-open [io-reader (jio/reader (or (jio/resource "build/version.edn")
@@ -110,9 +110,9 @@
               pb-reader (PushbackReader. io-reader)]
     (let [{:keys [timestamp ref-short dirty?]} (edn/read pb-reader)
           dev-timestamp (str (Math/round ^Double (/ (System/currentTimeMillis) 1000.0)))
-          timestamp (Long/parseLong (or timestamp dev-timestamp))
-          format    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
-          date      (.format format (Date. ^Long (* timestamp 1000)))]
+          timestamp     (Long/parseLong (or timestamp dev-timestamp))
+          format        (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
+          date          (.format format (Date. ^Long (* timestamp 1000)))]
       (str project-version " - " ref-short " - " date (if dirty? " +" "")))))
 
 (defn cli-options []
@@ -391,27 +391,50 @@
     ""))
 
 
+(defn english-list [args]
+  (condp = (count args)
+    0 ""
+    1 (first args)
+    2 (str (first args) " and " (last args))
+    (let [xs (interpose ", " args)]
+      (apply str (concat (butlast xs) ["and " (last xs)])))))
+
 (defn validate-args
   "Validate command line arguments. Either return a map indicating the program
   should exit (with a error message, and optional ok status), or a map
   indicating the action the program should take and the options provided."
   [args]
-  (let [parsed (cli/parse-opts args (cli-options)
-                               :strict true
-                               :summary-fn summarize)
+  (let [parsed      (cli/parse-opts args (cli-options)
+                                    :strict true
+                                    :summary-fn summarize)
         {:keys [options arguments errors summary]} parsed
-        fail   (fn [msg] {:exit-message (error-msg [msg] summary)})]
+        fail        (fn [msg] {:exit-message (error-msg [msg] summary)})
+        search-root (file (first arguments))]
     (cond
-      (:examples options) {:exit-message (examples options) :ok? true} ; examples => exit OK with examples
-      (:help options) {:exit-message (usage summary) :ok? true} ; help => exit OK with usage summary
+      (:examples options)
+      {:exit-message (examples options) :ok? true} ; examples => exit OK with examples
+
+      (:help options)
+      {:exit-message (usage summary) :ok? true} ; help => exit OK with usage summary
+
       ;(and (:out-file options)
       ;     (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
+
       (and (:apath options)
-           (:path options)) (fail "can not use path (-p) and apath (-a) together")
-      errors {:exit-message (error-msg errors summary)}     ; errors => exit with description of errors
-      (valid-search-root? arguments) {:search-root (file (first arguments))
-                                      :opts        options}
-      :else (fail "invalid search-root"))))                 ; failed custom validation => exit with usage summary
+           (:path options))
+      (fail "can not use path (-p) and apath (-a) together")
+
+      errors
+      {:exit-message (error-msg errors summary)}     ; errors => exit with description of errors
+
+      (not= 1 (count arguments))
+      (fail (str "multiple search-roots provided: " (english-list arguments)))
+
+      (not (.isDirectory search-root))
+      (fail (str "invalid non-existent or non-directory search root: " search-root))
+
+      :else {:search-root search-root
+             :opts        options})))                       ; failed custom validation => exit with usage summary
 
 (defn exit [status msg]
   (println msg)
