@@ -429,12 +429,12 @@
 
       (= 0 (count arguments))
       (fail "no search root provided")
-        
+
       (> 1 (count arguments))
       (fail (str "multiple search-roots provided: " (english-list arguments)))
 
       (not (.isDirectory search-root))
-      (fail (str "invalid non-existent or non-directory search root: " search-root))
+      (fail (str "invalid non-directory search root: " search-root))
 
       :else {:search-root search-root
              :opts        options})))                       ; failed custom validation => exit with usage summary
