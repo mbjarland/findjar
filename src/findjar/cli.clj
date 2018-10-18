@@ -427,7 +427,10 @@
       errors
       {:exit-message (error-msg errors summary)}     ; errors => exit with description of errors
 
-      (not= 1 (count arguments))
+      (= 0 (count arguments))
+      (fail "no search root provided")
+        
+      (> 1 (count arguments))
       (fail (str "multiple search-roots provided: " (english-list arguments)))
 
       (not (.isDirectory search-root))
