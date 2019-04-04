@@ -162,6 +162,16 @@
 (comment
  "" ""
 
+ ;; findjar . -p "ATGDBSetup.*ModuleManager.properties" -g '\{[^}]+\}' | grep -vE "Resource|Message"
+
+ (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+            "-p" "ATGDBSetup.*ModuleManager.properties"
+            "-g" "[\\{]"
+            ;"--profile")
+            )
+
+
+
  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
             "-n" "GLOBAL.properties"
             "-g" "logging"
