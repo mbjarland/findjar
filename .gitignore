@@ -2,3 +2,5 @@ target
 .idea/workspace.xml
 .nrepl-port
 gen-resources
+.cpcache/
+projectFilesBackup/
