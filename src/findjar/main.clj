@@ -14,13 +14,13 @@
   the string at those indicies"
   [str idxs]
   (let [[r l _] (reduce
-                 (fn [[a s i] idx]
-                   (let [[t r] (split-at (- idx i) s)]
-                     [(conj a (str/join t))
-                      (str/join r)
-                      idx]))
-                 [[] str 0]
-                 idxs)]
+                  (fn [[a s i] idx]
+                    (let [[t r] (split-at (- idx i) s)]
+                      [(conj a (str/join t))
+                       (str/join r)
+                       idx]))
+                  [[] str 0]
+                  idxs)]
     (conj r l)))
 
 ; a global
@@ -46,21 +46,21 @@
     line
     (let [tokens (split-at-idxs line (mapcat vals match-idxs))]
       (first
-       (reduce
-        (fn [[a h?] token]
-          [(str a (if h? (style hit-color-fn token) token)) (not h?)])
-        ["" false]
-        tokens)))))
+        (reduce
+          (fn [[a h?] token]
+            [(str a (if h? (style hit-color-fn token) token)) (not h?)])
+          ["" false]
+          tokens)))))
 
 (defn content-line-count
   "returns number of lines in a content item"
   [content-provider]
   (content-provider
-   nil
-   (fn [reader]
-     (with-open [r (LineNumberReader. reader)]
-       (.skip r Long/MAX_VALUE)
-       (.getLineNumber r)))))
+    nil
+    (fn [reader]
+      (with-open [r (LineNumberReader. reader)]
+        (.skip r Long/MAX_VALUE)
+        (.getLineNumber r)))))
 
 (defn content-string
   "creates a string 'dump' of a content item, first arg is a 'content provider'
@@ -70,24 +70,24 @@
   and the last argument is the map of options sent into this program"
   [content-provider path to-file? opts]
   (content-provider
-   nil
-   (fn [reader]
-     (with-out-str
-       (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
-         (println (style red "<<<<<<<") path)
-         (let [max-n-len (count (str (content-line-count content-provider)))
-               lines     (line-seq reader)
-               grep      (:grep opts)]
-           (doseq [[n line] (map-indexed vector lines)]
-             (let [match-idxs (when grep (c/match-idxs grep line))
-                   line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
-                   prefix     (if to-file?
-                                ""
-                                (let [n-len (count (str (inc n)))
-                                      p     (str/join (repeat (- max-n-len n-len) \space))]
-                                  (str p (inc n) " ")))]
-               (println (str (style green prefix) line)))))
-         (println (style red ">>>>>>>")))))))
+    nil
+    (fn [reader]
+      (with-out-str
+        (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
+          (println (style red "<<<<<<<") path)
+          (let [max-n-len (count (str (content-line-count content-provider)))
+                lines     (line-seq reader)
+                grep      (:grep opts)]
+            (doseq [[n line] (map-indexed vector lines)]
+              (let [match-idxs (when grep (c/match-idxs grep line))
+                    line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
+                    prefix     (if to-file?
+                                 ""
+                                 (let [n-len (count (str (inc n)))
+                                       p     (str/join (repeat (- max-n-len n-len) \space))]
+                                   (str p (inc n) " ")))]
+                (println (str (style green prefix) line)))))
+          (println (style red ">>>>>>>")))))))
 
 (defn default-handler
   "returns an implementation of the FindJarHandler protocol. This moves all
@@ -126,7 +126,7 @@
             str      (content-string content-provider path to-file? opts)]
         ;(binding [*out* *err*]
         ;  (prn :strlen (count str) :f path))
-        (when str                                           ;str is nil if there was an issue reading file
+        (when str             ;str is nil if there was an issue reading file
           (if to-file?
             (with-open [w (jio/writer of :append true)]
               (.write w str)
@@ -151,7 +151,7 @@
       (if hard-exit-on-errors?
         (cli/exit (if ok? 0 1) exit-message)
         (println "would exit with code " (if ok? 0 1) "msg," exit-message))
-      (profile {:when profile? :nmax 10e7} (c/perform-scan search-root handler opts)))))
+      (profile {:when profile? :nmax 10000000} (c/perform-scan search-root handler opts)))))
 
 (defn -main [& args]
   (main-entrypoint true args))
@@ -160,64 +160,64 @@
   (main-entrypoint false args))
 
 (comment
- "" ""
+  "" ""
 
- ;; findjar . -p "ATGDBSetup.*ModuleManager.properties" -g '\{[^}]+\}' | grep -vE "Resource|Message"
+  ;; findjar . -p "ATGDBSetup.*ModuleManager.properties" -g '\{[^}]+\}' | grep -vE "Resource|Message"
 
- (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
-            "-p" "ATGDBSetup.*ModuleManager.properties"
-            "-g" "[\\{]"
-            ;"--profile")
-            )
-
-
-
- (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
-            "-n" "GLOBAL.properties"
-            "-g" "logging"
-            "--profile")
-
- (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
-            "-n" "GLOBAL.properties"
-            "-c"
-            "--profile")
+  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+             "-p" "ATGDBSetup.*ModuleManager.properties"
+             "-g" "[\\{]"
+             ;"--profile")
+             )
 
 
- (repl-main "."
-            "-n" "main.clj"
-            "-g" "main.clj")
 
- ;; parse a real set of opts
- (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
-                 (cli-options)
-                 :strict true
-                 :summary-fn summarize)
+  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+             "-n" "GLOBAL.properties"
+             "-g" "logging"
+             "--profile")
 
- ;; profile a run
- (profiled
-  {}
-  (repl-main
-   "/home/mbjarland/projects/kpna/packages/ATG10.2/"
-   "-t" "j"
-   "-n" "xml$"
-   "-g" "login"
-   "-fi"
-   "-x" "2"))
+  (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
+             "-n" "GLOBAL.properties"
+             "-c"
+             "--profile")
 
- (format-duration [duration]
-                  (let [periods [:year 365 :day 24 :hour 60 :minute 60 :second 60]
-                        total   (reduce (fn [a [_ p]] (* s p)) 1 periods)]
-                    (if (< duration 1)
-                      "now"
-                      (let [cf     (fn [[d p cs] [pn pc]] [(mod d p) (conj cs (/ p pc))])
-                            folder (fn [[s0 s1 r] p]
-                                     (match p
-                                            [_ 0] [s0 s1 r]
-                                            [n 1] [s1 ", " (str "1 " n s0 r)]
-                                            [n c] [s1 ", " (str c " " n s0 r)]))
-                            [_ _ components] (reduce cf [duration total '()] periods)
 
-                            [_ _ r] (reduce folder ["" " and " ""] components)]
-                        r))))
+  (repl-main "."
+             "-n" "main.clj"
+             "-g" "main.clj")
 
- )
+  ;; parse a real set of opts
+  (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
+                  (cli-options)
+                  :strict true
+                  :summary-fn summarize)
+
+  ;; profile a run
+  (profiled
+    {}
+    (repl-main
+      "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+      "-t" "j"
+      "-n" "xml$"
+      "-g" "login"
+      "-fi"
+      "-x" "2"))
+
+  (format-duration [duration]
+                   (let [periods [:year 365 :day 24 :hour 60 :minute 60 :second 60]
+                         total   (reduce (fn [a [_ p]] (* s p)) 1 periods)]
+                     (if (< duration 1)
+                       "now"
+                       (let [cf     (fn [[d p cs] [pn pc]] [(mod d p) (conj cs (/ p pc))])
+                             folder (fn [[s0 s1 r] p]
+                                      (match p
+                                             [_ 0] [s0 s1 r]
+                                             [n 1] [s1 ", " (str "1 " n s0 r)]
+                                             [n c] [s1 ", " (str c " " n s0 r)]))
+                             [_ _ components] (reduce cf [duration total '()] periods)
+
+                             [_ _ r] (reduce folder ["" " and " ""] components)]
+                         r))))
+
+  )

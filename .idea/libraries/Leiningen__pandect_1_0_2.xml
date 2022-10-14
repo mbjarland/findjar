@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="Leiningen: pandect:1.0.2">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/pandect/pandect/1.0.2/pandect-1.0.2.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
