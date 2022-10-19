@@ -366,7 +366,6 @@
           [:name :grep :path :apath])))))
 
 (defn perform-scan [search-root handler opts]
-  (prn :xopts opts)
   (let [opts      (p :1-munge-regexes (munge-regexes opts))
         valid-fn  (valid-file-fn opts)
         files     (filter #(p :1-check-valid-file (valid-fn %))
