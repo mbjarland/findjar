@@ -150,7 +150,7 @@
   (reduce
     (fn [a [window-# lines]]
       (if-let [match-idxs (match-idxs pattern (nth lines context))]
-        (concat a (window->matching-lines path              ; if there was a match
+        (concat a (window->matching-lines path ; if there was a match
                                           window-#
                                           context
                                           lines
@@ -185,7 +185,7 @@
             pattern   (:grep opts)
             context   (or (:context opts) 0)
             window    (inc (* 2 context))
-            pad       (repeat context nil)                  ;TODO: fix padding with empty string
+            pad       (repeat context nil) ;TODO: fix padding with empty string
             sliding   (partition window 1 (concat pad s pad))
             line-maps (find-line-maps-with-context sliding context pattern path)]
         (when (not-empty line-maps)
@@ -282,8 +282,8 @@
     (when (and (pos? i) (not (= (inc i) (count n))))
       (subs n (inc i)))))
 
-(defn valid-file-fn [opts]                                  ;;TODO: prevent in-jar search when disk files only
-  (let [active-types (:types opts)                          ;types is a set #{:default "jar" "zip"} etc
+(defn valid-file-fn [opts]    ;;TODO: prevent in-jar search when disk files only
+  (let [active-types (:types opts) ;types is a set #{:default "jar" "zip"} etc
         exts         (remove #{:default} active-types)]
     (fn [^File f]
       (when (p :1.1-valid-file-is-file (.isFile f))
