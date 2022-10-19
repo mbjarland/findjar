@@ -288,7 +288,7 @@
     (fn [^File f]
       (when (p :1.1-valid-file-is-file (.isFile f))
         (boolean
-            (or (active-types :default)                       ;; if disk files -> need to let everything through for name/path matching
+          (or (active-types :default)                       ;; if disk files -> need to let everything through for name/path matching
               (some #(.endsWith (.getName f) %) exts)))))))
 
 ;; cases

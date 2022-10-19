@@ -1,15 +1,15 @@
 (ns findjar.cli
-  (:require [clojure.tools.cli :as cli]
-            [clojure.edn :as edn]
+  (:require [clojure.edn :as edn]
             [clojure.java.io :as jio]
             [clojure.pprint :as cpp]
             [clojure.string :as str]
+            [clojure.tools.cli :as cli]
             [findjar.core :as c]
             [jansi-clj.auto]
             [jansi-clj.core :as ansi])
   (:gen-class)
-  (:import [java.text SimpleDateFormat]
-           [java.io PushbackReader]
+  (:import [java.io PushbackReader]
+           [java.text SimpleDateFormat]
            [java.util Date]))
 
 (def MAX_WIDTH 78)
@@ -381,7 +381,7 @@
   your user-supplied :summary-fn option) on the compiled option specs."
   [specs]
   (if (seq specs)
-    (let [show-defaults? false ;(some #(and (:required %) (contains? % :default)) specs)
+    (let [show-defaults? false                              ;(some #(and (:required %) (contains? % :default)) specs)
           parts          (map (partial cli/make-summary-part show-defaults?) specs)
           lens           (apply map (fn [& cols] (apply max (map count cols))) parts)
           lines          (cli/format-lines lens parts)]
@@ -410,10 +410,10 @@
         search-root (jio/file (first arguments))]
     (cond
       (:examples options)
-      {:exit-message (examples options) :ok? true} ; examples => exit OK with examples
+      {:exit-message (examples options) :ok? true}          ; examples => exit OK with examples
 
       (:help options)
-      {:exit-message (usage summary) :ok? true} ; help => exit OK with usage summary
+      {:exit-message (usage summary) :ok? true}             ; help => exit OK with usage summary
 
       ;(and (:out-file options)
       ;     (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
@@ -423,7 +423,7 @@
       (fail "can not use path (-p) and apath (-a) together")
 
       errors
-      {:exit-message (error-msg errors summary)} ; errors => exit with description of errors
+      {:exit-message (error-msg errors summary)}            ; errors => exit with description of errors
 
       (= 0 (count arguments))
       (fail "no search root provided")
@@ -435,7 +435,7 @@
       (fail (str "invalid non-directory search root: " search-root))
 
       :else {:search-root search-root
-             :opts        options}))) ; failed custom validation => exit with usage summary
+             :opts        options})))                       ; failed custom validation => exit with usage summary
 
 (defn exit [status msg]
   (println msg)
