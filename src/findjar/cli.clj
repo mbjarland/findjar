@@ -1,16 +1,14 @@
 (ns findjar.cli
-  (:require [findjar.core :as c]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as jio]
+            [clojure.pprint :as cpp]
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
-            [clojure.java.io :refer [file]]
+            [findjar.core :as c]
             [jansi-clj.auto]
-            [jansi-clj.core :as ansi]
-            [clojure.java.io :as jio]
-            [clojure.edn :as edn]
-            [clojure.pprint])
+            [jansi-clj.core :as ansi])
   (:gen-class)
-  (:import [java.nio.file Paths]
-           [java.io PushbackReader]
+  (:import [java.io PushbackReader]
            [java.text SimpleDateFormat]
            [java.util Date]))
 
@@ -18,19 +16,15 @@
 
 (defn multimethod-meta [multi]
   (reduce
-    (fn [a [k v]]
-      (assoc a k (v k)))
+    (fn [a [k v]] (assoc a k (v k)))
     {}
     (methods multi)))
 
 (defn hash-selectors []
   (str/join
     ", "
-    (map (fn [[k v]] (:desc v))
+    (map (fn [[_ v]] (:desc v))
          (multimethod-meta c/calculate-hash))))
-
-(defn hash-keys []
-  (keys (multimethod-meta c/calculate-hash)))
 
 (defn parse-hash-desc [desc]
   (let [m (reduce
@@ -39,7 +33,13 @@
             (multimethod-meta c/calculate-hash))]
     (m desc)))
 
-(defn file-types []
+(defn file-types
+  "Produces a map on the following form:
+  {\\d {:desc \"files on disk\", :default true, :ext :default},
+   \\j {:desc \"files in jar files\", :default true, :ext \"jar\"},
+   \\z {:desc \"files in zip files\", :default false, :ext \"zip\"}}
+   pulls the data from the multimethod defined for file types"
+  []
   (reduce
     (fn [a [k v]]
       (assoc a (:char v)
@@ -64,11 +64,11 @@
     (file-types)))
 
 (defn default-file-type-exts []
-  (mapv (fn [[k v]] (:ext v)) (default-file-types)))
+  (mapv (fn [[_ v]] (:ext v)) (default-file-types)))
 
 (defn wrap-line [width line]
   (let [words (str/split line #" ")]
-    (clojure.pprint/cl-format nil (str "~{~<~%~1," (dec width) ":;~A~> ~}") words)))
+    (cpp/cl-format nil (str "~{~<~%~1," (dec width) ":;~A~> ~}") words)))
 
 (defn un-whitespace [line]
   (if (.endsWith line "=")
@@ -81,9 +81,10 @@
         lines   (str/split wrapped #"\n")]
     (str/join (str \newline margin) lines)))
 
-(defn wrap-opts [width margin opts]
+(defn wrap-opts
   "apply a function to the descriptions of the command line opts,
   returning a new set of opts with the altered descriptions"
+  [width margin opts]
   (reduce
     (fn [c [short long desc & rest]]
       (let [modded (wrap-desc width margin desc)]
@@ -92,8 +93,9 @@
     opts))
 
 ;TODO: move this formatting into summarize
-(defn reformat-options [max-width opts]
+(defn reformat-options
   "reformat the command line params for a clean output when printing usage"
+  [max-width opts]
   (let [max-long-desc  (apply max (map (comp count second) opts))
         margin         (apply str (repeat (+ 2 3 1 max-long-desc 2) " "))
         max-desc-width (- max-width (+ max-long-desc 8))]
@@ -101,20 +103,18 @@
 
 (defn parse-types [types]
   (let [m (file-types)]
-    (map #(:ext (get m %)) types)))
-
-(def project-version "1.0.2") ;; TODO: pull this from project.clj
+    (into #{} (map #(:ext (get m %)) types))))
 
 (defn version-string []
   (with-open [io-reader (jio/reader (or (jio/resource "build/version.edn")
                                         (jio/file "gen-resources/build/version.edn")))
               pb-reader (PushbackReader. io-reader)]
-    (let [{:keys [timestamp ref-short dirty?]} (edn/read pb-reader)
+    (let [{:keys [timestamp ref-short version dirty?]} (edn/read pb-reader)
           dev-timestamp (str (Math/round ^Double (/ (System/currentTimeMillis) 1000.0)))
           timestamp     (Long/parseLong (or timestamp dev-timestamp))
           format        (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
           date          (.format format (Date. ^Long (* timestamp 1000)))]
-      (str project-version " - " ref-short " - " date (if dirty? " +" "")))))
+      (str version " - " ref-short " - " date (if dirty? " +" "")))))
 
 (defn cli-options []
   (reformat-options
@@ -148,7 +148,7 @@
       :validate [#(every? (comp not nil?) %) (str "type must be one of " (file-type-selectors))]]
      ["-x"
       "--context <#>"
-      "If -c is given, show <# of lines> lines of context around the match, defaults to 0"
+      "If -g is given, show <# of lines> lines of context around the match, defaults to 0"
       :parse-fn #(Integer/parseInt %)]
      ["-o"
       "--out-file <path>"
@@ -157,7 +157,7 @@
      ["-f"
       "--flags <flags>"
       "turns on regex flags for all matches used. Example: -f i turns on case insensitive matching for both file names and content. See oracle javadocs on
-       Pattern.html#special for details on java regex flags"]
+       java.util.regex.Pattern (special constructs > match flags) for details on java regex flags"]
 
      ["-c"
       "--cat"
@@ -195,8 +195,8 @@
          ""
          "usage: findjar <search-root> [-p <path-pattern>] [-g <content-pattern>]  [...]"
          ""
-         "findjar searches for files in any disk structure. It is capable of
-          looking both for/in normal files and also for/in files inside
+         "findjar searches for files/content in any disk structure. It is capable of
+         looking both for/in normal files and also for/in files inside
           zip/jar files. It is capable of regex matching both for file name/path
           and for content within the files."
          ""
@@ -231,8 +231,8 @@
          ""
          "For usage examples, run: ~> findjar --examples"
          ""
-         "Author: Matias Bjarland / matias@iteego.com"
-         "        Copyright (c) 2018 - Iteego AB="
+         "Author: Matias Bjarland / mbjarland@gmail.com"
+         "        Copyright (c) 2022 - Iteego AB"
          ""
          (str "findjar " (version-string))
          ""
@@ -372,19 +372,15 @@
        "ERROR" (when (> (count errors) 1) "S") ":\n\n"
        (str "  " (str/join (str \newline "  ") errors) \newline)))
 
-(defn valid-search-root? [arguments]
-  (and (= 1 (count arguments))
-       (.exists (file (first arguments)))))
-
 (defn summarize
-  "Reduce options specs into a options summary for printing at a terminal.
+  "Reduce options specs into an options summary for printing at a terminal.
   Note that the specs argument should be the compiled version. That effectively
   means that you shouldn't call summarize directly. When you call parse-opts
   you get back a :summary key which is the result of calling summarize (or
   your user-supplied :summary-fn option) on the compiled option specs."
   [specs]
   (if (seq specs)
-    (let [show-defaults? false ;(some #(and (:required %) (contains? % :default)) specs)
+    (let [show-defaults? false                              ;(some #(and (:required %) (contains? % :default)) specs)
           parts          (map (partial cli/make-summary-part show-defaults?) specs)
           lens           (apply map (fn [& cols] (apply max (map count cols))) parts)
           lines          (cli/format-lines lens parts)]
@@ -402,7 +398,7 @@
 
 (defn validate-args
   "Validate command line arguments. Either return a map indicating the program
-  should exit (with a error message, and optional ok status), or a map
+  should exit (with an error message, and optional ok status), or a map
   indicating the action the program should take and the options provided."
   [args]
   (let [parsed      (cli/parse-opts args (cli-options)
@@ -410,13 +406,13 @@
                                     :summary-fn summarize)
         {:keys [options arguments errors summary]} parsed
         fail        (fn [msg] {:exit-message (error-msg [msg] summary)})
-        search-root (file (first arguments))]
+        search-root (jio/file (first arguments))]
     (cond
       (:examples options)
-      {:exit-message (examples options) :ok? true} ; examples => exit OK with examples
+      {:exit-message (examples options) :ok? true}          ; examples => exit OK with examples
 
       (:help options)
-      {:exit-message (usage summary) :ok? true} ; help => exit OK with usage summary
+      {:exit-message (usage summary) :ok? true}             ; help => exit OK with usage summary
 
       ;(and (:out-file options)
       ;     (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
@@ -426,7 +422,7 @@
       (fail "can not use path (-p) and apath (-a) together")
 
       errors
-      {:exit-message (error-msg errors summary)} ; errors => exit with description of errors
+      {:exit-message (error-msg errors summary)}            ; errors => exit with description of errors
 
       (= 0 (count arguments))
       (fail "no search root provided")
@@ -438,7 +434,7 @@
       (fail (str "invalid non-directory search root: " search-root))
 
       :else {:search-root search-root
-             :opts        options}))) ; failed custom validation => exit with usage summary
+             :opts        options})))                       ; failed custom validation => exit with usage summary
 
 (defn exit [status msg]
   (println msg)
@@ -451,7 +447,7 @@
                   :strict true
                   :summary-fn summarize)
 
-  ;; provide multiple hash algs
+  ;; provide multiple hash algorithms
   (cli/parse-opts ["-s" "sha1" "-s" "md5"]
                   (cli-options)
                   :strict true
@@ -459,6 +455,12 @@
 
   ;; parse a real set of opts
   (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
+                  (cli-options)
+                  :strict true
+                  :summary-fn summarize)
+
+  (cli/parse-opts ["." "-n" ".clj" "-t" "zd"]
+
                   (cli-options)
                   :strict true
                   :summary-fn summarize)
