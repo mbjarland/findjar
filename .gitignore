@@ -4,3 +4,5 @@ target
 gen-resources
 .cpcache/
 projectFilesBackup/
+.calva/
+.clj-kondo/

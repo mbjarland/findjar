@@ -3,12 +3,15 @@
     <words>
       <w>algo</w>
       <w>apath</w>
+      <w>cljc</w>
       <w>descs</w>
       <w>entrypoint</w>
+      <w>exts</w>
       <w>findjar</w>
       <w>idxs</w>
       <w>jansi</w>
       <w>multimethod</w>
+      <w>objectweb</w>
       <w>pandect</w>
       <w>regexes</w>
       <w>tufte</w>

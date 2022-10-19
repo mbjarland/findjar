@@ -2,7 +2,7 @@
 <module cursive.leiningen.project.LeiningenProjectsManager.displayName="mbjarland/findjar:1.0.2" cursive.leiningen.project.LeiningenProjectsManager.isLeinModule="true" type="JAVA_MODULE" version="4">
   <component name="BuildSystem">
     <option name="buildSystemId" value="LEININGEN" />
-    <option name="displayName" value="mbjarland/findjar:1.0.3" />
+    <option name="displayName" value="mbjarland/findjar:1.0.4" />
   </component>
   <component name="NewModuleRootManager">
     <output url="file://$MODULE_DIR$/target/classes" />
