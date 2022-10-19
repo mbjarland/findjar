@@ -126,7 +126,7 @@
             str      (content-string content-provider path to-file? opts)]
         ;(binding [*out* *err*]
         ;  (prn :strlen (count str) :f path))
-        (when str             ;str is nil if there was an issue reading file
+        (when str                                           ;str is nil if there was an issue reading file
           (if to-file?
             (with-open [w (jio/writer of :append true)]
               (.write w str)
