@@ -1,4 +1,4 @@
-(defproject mbjarland/findjar "1.0.3"
+(defproject mbjarland/findjar "1.0.4"
   :description "findjar utility - capable of searching within zip/jar archives"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"

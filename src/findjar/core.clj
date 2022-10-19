@@ -293,34 +293,57 @@
               (some #(and (string? %) (.endsWith (.getName f) %))
                     active-types)))))))
 
+;; cases
+;  file           flags      result                      exception
+;  ----           -----      ------
+;  normal         d          default
+;  normal         jz         <excluded by file filters>
+;  jar            d          default                     x
+;  jar            dz         default                     x
+;  jar            j          jar
+;  jar            d          default                     x
+;  zip            dz         default                     x
+;  zip            j          jar
+;  zip            j          jar
+;  zip            j          jar
+
 (defmulti file-finder
-          (fn [^File f]
-            (p :2-file-ext (file-ext f))))
+  (fn [{:keys [^File file types]}]
+    (let [ext (p :2-file-ext (file-ext file))]
+      (if (and (#{"jar" "zip"} ext)
+               (not (types ext)))
+        :default
+        ext
+        ))))
+
+(comment
+  (file-finder {:file (clojure.java.io/file "bob.jar")})
+  )
 
 (defmethod file-finder "jar"
-  [^File f]
+  [{:keys [file]}]
   {:fn      (fn [^String path opts handler]
               (p :2-jar-file-finder
-                 (find-in-jar f path opts handler)))
+                 (find-in-jar file path opts handler)))
    :desc    "files in jar files"
    :default true
    :char    \j})
 
 (defmethod file-finder "zip"
-  [^File f]
+  [{:keys [file]}]
   {:fn      (fn [^String path opts handler]
               (p :2-zip-file-finder
-                 (find-in-jar f path opts handler)))
+                 (find-in-jar file path opts handler)))
    :desc    "files in zip files"
    :default false
    :char    \z})
 
 (defmethod file-finder :default
-  [^File f]
+  [{:keys [file]}]
   {:fn      (fn [^String path opts handler]
               (p :2-disk-file-finder
-                 (let [file-name        (.getName f)
-                       stream-factory   #(jio/input-stream f)
+                 (let [file-name        (.getName file)
+                       stream-factory   #(jio/input-stream file)
                        content-provider (make-content-provider stream-factory handler opts)]
                    (print-stream-matches opts file-name path content-provider handler))))
    :desc    "files on disk"
@@ -343,6 +366,7 @@
           [:name :grep :path :apath])))))
 
 (defn perform-scan [search-root handler opts]
+  (prn :xopts opts)
   (let [opts      (p :1-munge-regexes (munge-regexes opts))
         valid-fn  (valid-file-fn opts)
         files     (filter #(p :1-check-valid-file (valid-fn %))
@@ -353,6 +377,6 @@
                     (if absolute? (.getCanonicalPath f)
                       (subs (.getPath f) root-len)))]
     (doseq [f files]
-      (let [finder (p :2-resolve-finder-fn (:fn (file-finder f)))
+      (let [finder (p :2-resolve-finder-fn (:fn (file-finder (assoc opts :file f))))
             path   (to-path f)]
         (p :1-call-finder-fn (finder path opts handler))))))

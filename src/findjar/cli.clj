@@ -19,7 +19,7 @@
 (defn multimethod-meta [multi]
   (reduce
     (fn [a [k v]]
-      (assoc a k (v k)))
+      (assoc a k (v {})))
     {}
     (methods multi)))
 
@@ -64,7 +64,7 @@
     (file-types)))
 
 (defn default-file-type-exts []
-  (mapv (fn [[k v]] (:ext v)) (default-file-types)))
+  (set (mapv (fn [[k v]] (:ext v)) (default-file-types))))
 
 (defn wrap-line [width line]
   (let [words (str/split line #" ")]
@@ -101,7 +101,7 @@
 
 (defn parse-types [types]
   (let [m (file-types)]
-    (map #(:ext (get m %)) types)))
+    (set (map #(:ext (get m %)) types))))
 
 (def project-version "1.0.2") ;; TODO: pull this from project.clj
 

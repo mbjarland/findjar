@@ -175,9 +175,11 @@
   (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-n" "GLOBAL.properties"
              "-g" "logging"
-             "--profile")
+             "-t" "d"
+             ;"--profile"
+             )
 
-  (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
+  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-n" "GLOBAL.properties"
              "-c"
              "--profile")
