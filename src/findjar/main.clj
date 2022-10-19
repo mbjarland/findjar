@@ -74,20 +74,20 @@
     (fn [reader]
       (with-out-str
         (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
-                 (println (style red "<<<<<<<") path)
-                 (let [max-n-len (count (str (content-line-count content-provider)))
-                       lines     (line-seq reader)
-                       grep      (:grep opts)]
-                   (doseq [[n line] (map-indexed vector lines)]
-                     (let [match-idxs (when grep (c/match-idxs grep line))
-                           line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
-                           prefix     (if to-file?
-                                        ""
-                                        (let [n-len (count (str (inc n)))
-                                              p     (str/join (repeat (- max-n-len n-len) \space))]
-                                          (str p (inc n) " ")))]
-                       (println (str (style green prefix) line)))))
-                 (println (style red ">>>>>>>")))))))
+          (println (style red "<<<<<<<") path)
+          (let [max-n-len (count (str (content-line-count content-provider)))
+                lines     (line-seq reader)
+                grep      (:grep opts)]
+            (doseq [[n line] (map-indexed vector lines)]
+              (let [match-idxs (when grep (c/match-idxs grep line))
+                    line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
+                    prefix     (if to-file?
+                                 ""
+                                 (let [n-len (count (str (inc n)))
+                                       p     (str/join (repeat (- max-n-len n-len) \space))]
+                                   (str p (inc n) " ")))]
+                (println (str (style green prefix) line)))))
+          (println (style red ">>>>>>>")))))))
 
 (defn default-handler
   "returns an implementation of the FindJarHandler protocol. This moves all
@@ -98,8 +98,8 @@
   (reify c/FindJarHandler
     (warn [_ msg ex opts]
       (binding [*use-colors* (use-colors? opts)]
-               ;(.printStackTrace ex)
-               (println (style red (str "WARN:" msg)))))
+        ;(.printStackTrace ex)
+        (println (style red (str "WARN:" msg)))))
 
     (match [_ path opts]
       (println path))
@@ -113,11 +113,11 @@
             len       (count (str display-#))
             pad       (str/join (repeat (inc (- max len)) \space))]
         (binding [*use-colors* (use-colors? opts)]
-                 (println (str (str/trim path)
-                               (if (and (not hit?) context?) " " ":")
-                               display-#
-                               pad
-                               (highlight-matches hit? line match-idxs red opts))))))
+          (println (str (str/trim path)
+                        (if (and (not hit?) context?) " " ":")
+                        display-#
+                        pad
+                        (highlight-matches hit? line match-idxs red opts))))))
 
     (dump-stream
       [_ path content-provider opts]
@@ -126,7 +126,7 @@
             str      (content-string content-provider path to-file? opts)]
         ;(binding [*out* *err*]
         ;  (prn :strlen (count str) :f path))
-        (when str                                           ;str is nil if there was an issue reading file
+        (when str             ;str is nil if there was an issue reading file
           (if to-file?
             (with-open [w (jio/writer of :append true)]
               (.write w str)
@@ -160,10 +160,7 @@
   (main-entrypoint false args))
 
 (comment
-  "" ""
-
   ;; findjar . -p "ATGDBSetup.*ModuleManager.properties" -g '\{[^}]+\}' | grep -vE "Resource|Message"
-
   (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-p" "ATGDBSetup.*ModuleManager.properties"
              "-g" "[\\{]"
@@ -171,16 +168,11 @@
              ;"--profile")
              )
 
-
-
   (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
              "-n" "GLOBAL.properties"
              "-g" "logging"
              "-t" "z"
              "--profile")
-             "-t" "d"
-             ;"--profile"
-             )
 
   (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-n" "GLOBAL.properties"

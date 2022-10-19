@@ -150,7 +150,7 @@
   (reduce
     (fn [a [window-# lines]]
       (if-let [match-idxs (match-idxs pattern (nth lines context))]
-        (concat a (window->matching-lines path              ; if there was a match
+        (concat a (window->matching-lines path ; if there was a match
                                           window-#
                                           context
                                           lines
@@ -185,7 +185,7 @@
             pattern   (:grep opts)
             context   (or (:context opts) 0)
             window    (inc (* 2 context))
-            pad       (repeat context nil)                  ;TODO: fix padding with empty string
+            pad       (repeat context nil) ;TODO: fix padding with empty string
             sliding   (partition window 1 (concat pad s pad))
             line-maps (find-line-maps-with-context sliding context pattern path)]
         (when (not-empty line-maps)
@@ -221,8 +221,8 @@
            macro-op (or cat hash)]
        (p :4.2-print-stream-matches
           (cond
-            (and name (not (re-find name file-name))) nil   ; no name match -> exit
-            (and path (not (re-find path file-path))) nil   ; no path match -> exit
+            (and name (not (re-find name file-name))) nil ; no name match -> exit
+            (and path (not (re-find path file-path))) nil ; no path match -> exit
             (and apath (not (re-find apath file-path))) nil ; no apath match -> exit
             (not (or macro-op grep)) (match handler file-path opts) ; normal non-grep match
             (and grep macro-op (not (stream-line-matches? content-provider grep))) nil ;grep+macro and no matches -> nil
@@ -282,13 +282,13 @@
     (when (and (pos? i) (not (= (inc i) (count n))))
       (subs n (inc i)))))
 
-(defn valid-file-fn [opts]                                  ;;TODO: prevent in-jar search when disk files only
-  (let [active-types (:types opts)                          ;types is a set #{:default "jar" "zip"} etc
+(defn valid-file-fn [opts]    ;;TODO: prevent in-jar search when disk files only
+  (let [active-types (:types opts) ;types is a set #{:default "jar" "zip"} etc
         exts         (remove #{:default} active-types)]
     (fn [^File f]
       (when (p :1.1-valid-file-is-file (.isFile f))
         (boolean
-            (or (active-types :default)                       ;; if disk files -> need to let everything through for name/path matching
+          (or (active-types :default) ;; if disk files -> need to let everything through for name/path matching
               (some #(.endsWith (.getName f) %) exts)))))))
 
 ;; cases

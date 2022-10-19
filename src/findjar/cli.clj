@@ -1,15 +1,15 @@
 (ns findjar.cli
-  (:require [clojure.tools.cli :as cli]
-            [clojure.edn :as edn]
+  (:require [clojure.edn :as edn]
             [clojure.java.io :as jio]
             [clojure.pprint :as cpp]
             [clojure.string :as str]
+            [clojure.tools.cli :as cli]
             [findjar.core :as c]
             [jansi-clj.auto]
             [jansi-clj.core :as ansi])
   (:gen-class)
-  (:import [java.text SimpleDateFormat]
-           [java.io PushbackReader]
+  (:import [java.io PushbackReader]
+           [java.text SimpleDateFormat]
            [java.util Date]))
 
 (def MAX_WIDTH 78)
