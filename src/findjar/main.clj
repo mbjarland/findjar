@@ -160,6 +160,12 @@
   (main-entrypoint false args))
 
 (comment
+  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
+             "-n" "ZipFile"
+             "--profile"
+             )
+
+
   ;; findjar . -p "ATGDBSetup.*ModuleManager.properties" -g '\{[^}]+\}' | grep -vE "Resource|Message"
   (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-p" "ATGDBSetup.*ModuleManager.properties"

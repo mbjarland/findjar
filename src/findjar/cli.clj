@@ -65,7 +65,7 @@
     (file-types)))
 
 (defn default-file-type-exts []
-  (mapv (fn [[_ v]] (:ext v)) (default-file-types)))
+  (set (mapv (fn [[_ v]] (:ext v)) (default-file-types))))
 
 (defn wrap-line [width line]
   (let [words (str/split line #" ")]
