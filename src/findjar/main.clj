@@ -89,13 +89,13 @@
                 (println (str (style green prefix) line)))))
           (println (style red ">>>>>>>")))))))
 
-(defn default-handler
-  "returns an implementation of the FindJarHandler protocol. This moves all
+(defn default-output
+  "returns an implementation of the FindJarOutput protocol. This moves all
   side-effecting things out of the rest of the code and into this single place.
   It also makes the rest of the code more testable and makes it possible for
   users of this code to modify the behavior by supplying their own handler"
   []
-  (reify c/FindJarHandler
+  (reify c/FindJarOutput
     (warn [_ msg ex opts]
       (binding [*use-colors* (use-colors? opts)]
         ;(.printStackTrace ex)
@@ -145,13 +145,13 @@
   [hard-exit-on-errors? [& args]]
   (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
         profile? (:profile opts)
-        handler  (default-handler)]
+        output   (default-output)]
     (when profile? (prn :do-exit? hard-exit-on-errors? :opts opts))
     (if exit-message
       (if hard-exit-on-errors?
         (cli/exit (if ok? 0 1) exit-message)
         (println "would exit with code " (if ok? 0 1) "msg," exit-message))
-      (profile {:when profile? :nmax 10000000} (c/perform-scan search-root handler opts)))))
+      (profile {:when profile? :nmax 10000000} (c/perform-scan search-root output opts)))))
 
 (defn -main [& args]
   (main-entrypoint true args))
@@ -170,15 +170,24 @@
   (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-p" "ATGDBSetup.*ModuleManager.properties"
              "-g" "[\\{]"
-             "-t" "z"
+             ;"-t" "z"
              ;"--profile")
              )
 
-  (repl-main "/Users/mbjarland/projects/kpna/packages/ATG10.2/"
+  (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-n" "GLOBAL.properties"
              "-g" "logging"
              "-t" "z"
-             "--profile")
+             ;"--profile"
+             )
+
+  ; test hashing
+  (repl-main "tmp"
+             "-s" "md5"
+             "-s" "sha1"
+             ;"--profile"
+             )
+
 
   (repl-main "/home/mbjarland/projects/kpna/packages/ATG10.2/"
              "-n" "GLOBAL.properties"
