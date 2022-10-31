@@ -5,7 +5,7 @@
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.11.1"]
                  [org.clojure/tools.cli "1.0.214"]
-                 [pandect/pandect "1.0.2"]
+                 ;[pandect/pandect "1.0.2"]
                  [jansi-clj "1.0.1"]
                  [com.taoensso/tufte "2.3.0"]]
   :main findjar.main

@@ -1,9 +1,10 @@
 (ns findjar.core
   (:require [clojure.java.io :as jio]
             [clojure.string :as str]
-            [pandect.algo.crc32 :refer [crc32]]
-            [pandect.algo.md5 :refer [md5]]
-            [pandect.algo.sha1 :refer [sha1]]
+            [findjar.hash :refer [crc-32 md5 sha-1 sha-256 sha-512]]
+            ;[pandect.algo.crc32 :refer [crc32]]
+            ;[pandect.algo.md5 :refer [md5]]
+            ;[pandect.algo.sha1 :refer [sha1]]
             [taoensso.tufte :refer [p]])
   (:import [java.io File]
            [java.util.zip ZipEntry ZipFile])
@@ -61,7 +62,7 @@
 ; (defn relative-path [^File search-root ^File f]
 ;   (.toString (.relativize (.toPath search-root) (.toPath f))))
 
-(defn calculate-pandect-hash
+(defn apply-hash-function
   "internal function to calculate pandect hashes"
   [pandect-fn content-provider]
   (content-provider (fn [stream] (pandect-fn stream)) nil))
@@ -70,17 +71,27 @@
 
 (defmethod calculate-hash :md5 [_]
   {:fn   (fn [content-provider]
-           (calculate-pandect-hash md5 content-provider))
+           (apply-hash-function md5 content-provider))
    :desc "md5"})
 
 (defmethod calculate-hash :sha1 [_]
   {:fn   (fn [content-provider]
-           (calculate-pandect-hash sha1 content-provider))
+           (apply-hash-function sha-1 content-provider))
    :desc "sha1"})
+
+(defmethod calculate-hash :sha256 [_]
+  {:fn   (fn [content-provider]
+           (apply-hash-function sha-256 content-provider))
+   :desc "sha256"})
+
+(defmethod calculate-hash :sha512 [_]
+  {:fn   (fn [content-provider]
+           (apply-hash-function sha-512 content-provider))
+   :desc "sha512"})
 
 (defmethod calculate-hash :crc32 [_]
   {:fn   (fn [content-provider]
-           (calculate-pandect-hash crc32 content-provider))
+           (apply-hash-function crc-32 content-provider))
    :desc "crc32"})
 
 (defn match-idxs
