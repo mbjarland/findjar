@@ -1,10 +1,11 @@
 (ns findjar.hash
-  (:import [java.security MessageDigest]
+  (:import [java.io InputStream]
+           [java.security DigestInputStream MessageDigest]
            [java.util Locale]
            [java.util.zip CRC32]))
 
 
-(def  hex-chars ^bytes
+(def hex-chars ^bytes
   (byte-array (.getBytes "0123456789abcdef" "UTF-8")))
 
 (defn bytes->hex
@@ -21,18 +22,30 @@
         (recur (inc i))))
     (String. buffer "UTF-8")))
 
-(defn digest [algo]
-  (fn [^bytes data]
-    (-> (MessageDigest/getInstance algo)
-        (.digest data)
-        bytes->hex)))
+(defn digest [^String algo ^InputStream stream]
+  (let [digest (MessageDigest/getInstance algo)]
+    (with-open [dis (DigestInputStream. stream digest)]
+      (while (> (.read dis) -1)))
+    (bytes->hex digest)))
 
-(defn crc-32 ^String [^bytes data]
+; TODO: test with BufferedInputStream(is, buf-size) for
+; performance
+(defn read-is ^long
+  "reads inputstream using a fixed byte buffer. Calls
+  (update-fn byte-buffer n-bytes-read) for each buffered read.
+  Returns total bytes read."
+  [^InputStream stream update-fn]
+  (let [buf-size 256
+        buf      (byte-array buf-size)]
+    (loop [total-len 0]
+      (let [n (.read stream buf)]
+        (if (pos? n)
+          (do (update-fn buf n)
+              (recur (+ total-len n)))
+          total-len)))))
+
+(defn crc-32 ^String [^InputStream stream]
   (let [crc (CRC32.)]
-    (.update crc data)
+    (read-is stream (fn [^bytes buf ^long n] (.update crc buf 0 n)))
     (String/format Locale/US "%08x" (to-array [(.getValue crc)]))))
 
-(def md5 (digest "MD5"))
-(def sha-1 (digest "SHA-1"))
-(def sha-256 (digest "SHA-256"))
-(def sha-512 (digest "SHA-512"))

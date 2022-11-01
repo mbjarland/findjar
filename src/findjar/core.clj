@@ -1,13 +1,40 @@
 (ns findjar.core
   (:require [clojure.java.io :as jio]
             [clojure.string :as str]
-            [findjar.hash :refer [crc-32 md5 sha-1 sha-256 sha-512]])
+            [findjar.hash :as hash])
   ;[pandect.algo.crc32 :refer [crc32]]
   ;[pandect.algo.md5 :refer [md5]]
   ;[pandect.algo.sha1 :refer [sha1]])
   (:import [java.io File]
            [java.util.zip ZipEntry ZipFile])
   (:gen-class))
+
+(defprotocol FileContent
+  "a protocol definition to represent file content from either normal disk files
+  or files within zip/jar archives. As we use FindJarOutput to push the output
+  to stdout out of this namespace, we similarly need an abstraction for retrieving
+  the contents of a file to be able to hash/display lines/dump etc file contents.
+
+  This protocol allows us to create a 'content provider' which implements this
+  protocol and assuming you get handed a content provider to a specific 'file',
+  it allows you to do the following:
+
+    (as-stream content-provider #(do-something-with-file-content-stream %))
+    (as-reader content-provider #(do-something-with-file-content-reader %))
+
+  where the stream handed to the anonymous function is an InputStream to the
+  file contents (either on disk or inside a zip/jar archive) and the reader
+  is similar but for text content."
+  (as-stream [this stream-handler]
+    "called when you want to read the file contents as a binary stream.
+    stream-handler is a one argument function which will receive an open InputStream
+    to the file contents as the argument. It is not the responsibility of the
+    stream-handler to close the stream.")
+  (as-reader [this reader-handler]
+    "called when you want to read the file contents as a reader of text data.
+    reader-handler is a one argument function which will receive an open java.io.Reader
+    to the file contents as the argument. It is not the responsibility of the
+    stream-handler to close the reader."))
 
 (defprotocol FindJarOutput
   "a protocol definition to move all side effecting things (mainly io to stdout)
@@ -58,40 +85,26 @@
     meta-data for these hash operations. The last argument is a the full
     set of options used to start the file scan"))
 
-; java.8
-; (defn relative-path [^File search-root ^File f]
-;   (.toString (.relativize (.toPath search-root) (.toPath f))))
-
-(defn apply-hash-function
-  "internal function to calculate pandect hashes"
-  [pandect-fn content-provider]
-  (content-provider (fn [stream] (pandect-fn stream)) nil))
-
 (defmulti calculate-hash (fn [id] id))
 
 (defmethod calculate-hash :md5 [_]
-  {:fn   (fn [content-provider]
-           (apply-hash-function md5 content-provider))
+  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "MD5" %)))
    :desc "md5"})
 
 (defmethod calculate-hash :sha1 [_]
-  {:fn   (fn [content-provider]
-           (apply-hash-function sha-1 content-provider))
+  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "SHA-1" %)))
    :desc "sha1"})
 
 (defmethod calculate-hash :sha256 [_]
-  {:fn   (fn [content-provider]
-           (apply-hash-function sha-256 content-provider))
+  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "SHA-256" %)))
    :desc "sha256"})
 
 (defmethod calculate-hash :sha512 [_]
-  {:fn   (fn [content-provider]
-           (apply-hash-function sha-512 content-provider))
+  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "SHA-512" %)))
    :desc "sha512"})
 
 (defmethod calculate-hash :crc32 [_]
-  {:fn   (fn [content-provider]
-           (apply-hash-function crc-32 content-provider))
+  {:fn   (fn [content-provider] (as-stream content-provider #(hash/crc-32 %)))
    :desc "crc32"})
 
 (defn match-idxs
@@ -189,8 +202,8 @@
   "iterate through the file using a sliding window of
   context lines before the 'current line' and context lines
   after, output result on console on matches"
-  (content-provider
-    nil
+  (as-reader
+    content-provider
     (fn [reader]
       (let [s         (line-seq reader)
             pattern   (:grep opts)
@@ -208,8 +221,8 @@
 
 (defn stream-line-matches?
   [content-provider pattern]
-  (content-provider
-    nil
+  (as-reader
+    content-provider
     (fn [reader]
       (some (fn [line] (re-find pattern line)) (line-seq reader)))))
 
@@ -242,19 +255,18 @@
 (defn make-content-provider
   ""
   [stream-factory output opts]
-  (fn [stream-handler reader-handler]
-    (let [rh (fn [stream]
-               (with-open [reader (jio/reader stream)]
-                 (reader-handler reader)))]
+  (reify FileContent
+    (as-stream [_ stream-handler]
       (try
         (with-open [stream (stream-factory)]
-          (cond
-            (and stream-handler reader-handler) (do (stream-handler stream) (rh stream))
-            stream-handler (stream-handler stream)
-            reader-handler (rh stream)))
+          (stream-handler stream))
         (catch Exception e
           (warn output (.getMessage e) e opts)
-          nil)))))
+          nil)))
+    (as-reader [this reader-handler]
+      (as-stream this (fn [stream]
+                        (with-open [reader (jio/reader stream)]
+                          (reader-handler reader)))))))
 
 (def ^Integer slash (int \/))
 
