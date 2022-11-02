@@ -4,7 +4,7 @@
             [findjar.cli :as cli]
             [findjar.core :as c]
             [jansi-clj.auto]
-            [jansi-clj.core :refer [green red]]
+            [jansi-clj.core :refer [white green red]]
             [taoensso.tufte :refer [profile]])
   (:import [java.io File LineNumberReader])
   (:gen-class))
@@ -74,20 +74,20 @@
     (fn [reader]
       (with-out-str
         (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
-          (println (style red "<<<<<<<") path)
-          (let [max-n-len (count (str (content-line-count content-provider)))
-                lines     (line-seq reader)
-                grep      (:grep opts)]
-            (doseq [[n line] (map-indexed vector lines)]
-              (let [match-idxs (when grep (c/match-idxs grep line))
-                    line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
-                    prefix     (if to-file?
-                                 ""
-                                 (let [n-len (count (str (inc n)))
-                                       p     (str/join (repeat (- max-n-len n-len) \space))]
-                                   (str p (inc n) " ")))]
-                (println (str (style green prefix) line)))))
-          (println (style red ">>>>>>>")))))))
+                 (println (style red "<<<<<<<") path)
+                 (let [max-n-len (count (str (content-line-count content-provider)))
+                       lines     (line-seq reader)
+                       grep      (:grep opts)]
+                   (doseq [[n line] (map-indexed vector lines)]
+                     (let [match-idxs (when grep (c/match-idxs grep line))
+                           line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
+                           prefix     (if to-file?
+                                        ""
+                                        (let [n-len (count (str (inc n)))
+                                              p     (str/join (repeat (- max-n-len n-len) \space))]
+                                          (str p (inc n) " ")))]
+                       (println (str (style green prefix) line)))))
+                 (println (style red ">>>>>>>")))))))
 
 (defn default-output
   "returns an implementation of the FindJarOutput protocol. This moves all
@@ -98,8 +98,8 @@
   (reify c/FindJarOutput
     (warn [_ msg ex opts]
       (binding [*use-colors* (use-colors? opts)]
-        ;(.printStackTrace ex)
-        (println (style red (str "WARN:" msg)))))
+               ;(.printStackTrace ex)
+               (println (style red (str "WARN:" msg)))))
 
     (match [_ path opts]
       (println path))
@@ -113,11 +113,11 @@
             len       (count (str display-#))
             pad       (str/join (repeat (inc (- max len)) \space))]
         (binding [*use-colors* (use-colors? opts)]
-          (println (str (str/trim path)
-                        (if (and (not hit?) context?) " " ":")
-                        display-#
-                        pad
-                        (highlight-matches hit? line match-idxs red opts))))))
+                 (println (str (str/trim path)
+                               (if (and (not hit?) context?) " " ":")
+                               display-#
+                               pad
+                               (highlight-matches hit? line match-idxs red opts))))))
 
     (dump-stream
       [_ path content-provider opts]
@@ -134,7 +134,8 @@
             (println str)))))
 
     (print-hash [_ path hash-type hash-value opts]
-      (println hash-value path))))
+      (binding [*use-colors* (use-colors? opts)]
+               (println (style white hash-value) path)))))
 
 (taoensso.tufte/add-basic-println-handler! {})
 

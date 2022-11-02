@@ -2,29 +2,27 @@
   (:require [clojure.java.io :as jio]
             [clojure.string :as str]
             [findjar.hash :as hash])
-  ;[pandect.algo.crc32 :refer [crc32]]
-  ;[pandect.algo.md5 :refer [md5]]
-  ;[pandect.algo.sha1 :refer [sha1]])
   (:import [java.io File]
            [java.util.zip ZipEntry ZipFile])
   (:gen-class))
 
 (defprotocol FileContent
   "a protocol definition to represent file content from either normal disk files
-  or files within zip/jar archives. As we use FindJarOutput to push the output
-  to stdout out of this namespace, we similarly need an abstraction for retrieving
-  the contents of a file to be able to hash/display lines/dump etc file contents.
+  or files within zip/jar archives. As we use the protocol FindJarOutput to push
+  the output stdout to the edges of the system and stdout out of this namespace,
+  we similarly need an abstraction for retrieving the contents of a file to be
+  able to hash/display lines/dump etc file contents.
 
   This protocol allows us to create a 'content provider' which implements this
-  protocol and assuming you get handed a content provider to a specific 'file',
-  it allows you to do the following:
+  protocol and assuming you get handed a content provider (file-content in this
+  case) to a specific file, it allows you to do the following:
 
-    (as-stream content-provider #(do-something-with-file-content-stream %))
-    (as-reader content-provider #(do-something-with-file-content-reader %))
+    (as-stream file-content #(do-something-with-file-content-stream %))
+    (as-reader file-content #(do-something-with-file-content-reader %))
 
   where the stream handed to the anonymous function is an InputStream to the
   file contents (either on disk or inside a zip/jar archive) and the reader
-  is similar but for text content."
+  is similar but for receiving the content in text format."
   (as-stream [this stream-handler]
     "called when you want to read the file contents as a binary stream.
     stream-handler is a one argument function which will receive an open InputStream
@@ -67,7 +65,7 @@
 
     The fourth argument is the full set of options used to start the
     file scan")
-  (dump-stream [this path content-provider opts]
+  (dump-stream [this path file-content opts]
     "called to dump the entire contents of a file (when using the -c
     option) to some target location as specified by the opts. By default
     this will be either to stdout or to a target file (with the -o option),
@@ -88,23 +86,23 @@
 (defmulti calculate-hash (fn [id] id))
 
 (defmethod calculate-hash :md5 [_]
-  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "MD5" %)))
+  {:fn   (fn [file-content] (as-stream file-content #(hash/digest "MD5" %)))
    :desc "md5"})
 
 (defmethod calculate-hash :sha1 [_]
-  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "SHA-1" %)))
+  {:fn   (fn [file-content] (as-stream file-content #(hash/digest "SHA-1" %)))
    :desc "sha1"})
 
 (defmethod calculate-hash :sha256 [_]
-  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "SHA-256" %)))
+  {:fn   (fn [file-content] (as-stream file-content #(hash/digest "SHA-256" %)))
    :desc "sha256"})
 
 (defmethod calculate-hash :sha512 [_]
-  {:fn   (fn [content-provider] (as-stream content-provider #(hash/digest "SHA-512" %)))
+  {:fn   (fn [file-content] (as-stream file-content #(hash/digest "SHA-512" %)))
    :desc "sha512"})
 
 (defmethod calculate-hash :crc32 [_]
-  {:fn   (fn [content-provider] (as-stream content-provider #(hash/crc-32 %)))
+  {:fn   (fn [file-content] (as-stream file-content #(hash/crc-32 %)))
    :desc "crc32"})
 
 (defn match-idxs
@@ -198,12 +196,13 @@
 
   )
 
-(defn grep-stream [output path content-provider opts]
+(defn grep-stream
   "iterate through the file using a sliding window of
   context lines before the 'current line' and context lines
   after, output result on console on matches"
+  [output path file-content opts]
   (as-reader
-    content-provider
+    file-content
     (fn [reader]
       (let [s         (line-seq reader)
             pattern   (:grep opts)
@@ -220,18 +219,19 @@
               (grep-match output max-line-# line-map opts))))))))
 
 (defn stream-line-matches?
-  [content-provider pattern]
+  ""
+  [file-content pattern]
   (as-reader
-    content-provider
+    file-content
     (fn [reader]
       (some (fn [line] (re-find pattern line)) (line-seq reader)))))
 
 (defn calculate-hashes
   "hash-types is a coll of keywords :md5 :sha1 etc"
-  [output path content-provider hash-types opts]
+  [output path file-content hash-types opts]
   (doseq [hash-type hash-types]
     (let [hash-fn    (:fn (calculate-hash hash-type))
-          hash-value (hash-fn content-provider)]
+          hash-value (hash-fn file-content)]
       (print-hash output path hash-type hash-value opts))))
 
 (defn print-stream-matches
@@ -239,7 +239,7 @@
    It takes the output handler implementing the output protocol
    defined above, options, file name and path, and a stream factory
    and executes searches based on the provided data"
-  [output opts file-name file-path content-provider]
+  [output opts file-name file-path file-content]
   (let [{:keys [name grep path apath cat hash]} opts
         macro-op (or cat hash)]
     (cond
@@ -247,12 +247,12 @@
       (and path (not (re-find path file-path))) nil         ; no path match -> exit
       (and apath (not (re-find apath file-path))) nil       ; no apath match -> exit
       (not (or macro-op grep)) (match output file-path opts) ; normal non-grep match
-      (and grep macro-op (not (stream-line-matches? content-provider grep))) nil ;grep+macro and no matches -> nil
-      hash (calculate-hashes output file-path content-provider hash opts)
-      cat (dump-stream output file-path content-provider opts)
-      grep (grep-stream output file-path content-provider opts))))
+      (and grep macro-op (not (stream-line-matches? file-content grep))) nil ;grep+macro and no matches -> nil
+      hash (calculate-hashes output file-path file-content hash opts)
+      cat (dump-stream output file-path file-content opts)
+      grep (grep-stream output file-path file-content opts))))
 
-(defn make-content-provider
+(defn wrap-file-content
   ""
   [stream-factory output opts]
   (reify FileContent
@@ -270,13 +270,11 @@
 
 (def ^Integer slash (int \/))
 
-(defn get-name-part
-  "get the name part of a slash delimited path, e.g.
-  given a/b/c.txt, return c.txt"
+(defn name-part
+  "given a/b/c.txt return c.txt"
   [^String path]
   (let [i (.lastIndexOf path slash)]
-    (if (= i -1) path
-      (subs path i))))
+    (if (= i -1) path (subs path i))))
 
 ; TODO: make -type accept a set to support "-t fjg" for files, jar files, gzip files etc
 (defn find-in-jar
@@ -286,12 +284,12 @@
       (try
         (with-open [^ZipFile zip (ZipFile. ^File jar)]
           (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
-            (let [entry-path       (.getName entry)
-                  entry-name       (get-name-part entry-path) ;(.getName (jio/file entry-path)))
-                  jar-path         (.toString (.append (StringBuilder. prefix) entry-path)) ; (str prefix entry-path))
-                  stream-factory   #(.getInputStream zip entry)
-                  content-provider (make-content-provider stream-factory output opts)]
-              (print-stream-matches output opts entry-name jar-path content-provider))))
+            (let [entry-path     (.getName entry)
+                  entry-name     (name-part entry-path)     ;(.getName (jio/file entry-path)))
+                  jar-path       (.toString (.append (StringBuilder. prefix) entry-path)) ; (str prefix entry-path))
+                  stream-factory #(.getInputStream zip entry)
+                  file-content   (wrap-file-content stream-factory output opts)]
+              (print-stream-matches output opts entry-name jar-path file-content))))
         (catch Exception e
           (warn output
                 (str (.getSimpleName (class e)) " opening " (.getPath jar) " - " (.getMessage e))
@@ -359,10 +357,10 @@
 (defmethod file-finder :default
   [{:keys [file]}]
   {:fn      (fn [^String path opts output]
-              (let [file-name        (.getName file)
-                    stream-factory   #(jio/input-stream file)
-                    content-provider (make-content-provider stream-factory output opts)]
-                (print-stream-matches output opts file-name path content-provider)))
+              (let [file-name      (.getName file)
+                    stream-factory #(jio/input-stream file)
+                    file-content   (wrap-file-content stream-factory output opts)]
+                (print-stream-matches output opts file-name path file-content)))
    :desc    "files on disk"
    :default true
    :char    \d})
