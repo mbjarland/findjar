@@ -11,11 +11,16 @@
 (defn clean [_]
   (b/delete {:path "target"}))
 
-(defn generate-version-file [_]
-  (let [hash  (b/git-process {:git-args ["rev-parse" "HEAD"]})
-        short (b/git-process {:git-args ["rev-parse" "--short" "HEAD"]})
-        ccount (b/git-count-revs nil)])
-  )
+(defn gen-version-file [_]
+  (let [hash      (b/git-process {:git-args ["rev-parse" "HEAD"]})
+        short     (apply str (take 7 hash))
+        rev-count (b/git-count-revs nil)]
+    (b/write-file {:path    "gen-resources/build/version.edn"
+                   :content {:ref       hash
+                             :ref-short short
+                             :version   version
+                             :rev-count rev-count
+                             :dirty?    true}})))
 
 (b/git-count-revs nil)
 
