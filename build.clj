@@ -16,6 +16,12 @@
         short     (apply str (take 7 hash))
         rev-count (b/git-count-revs nil)
         status    (b/git-process {:git-args ["status" "--porcelain"]})]
+    (prn {:path    "gen-resources/build/version.edn"
+                   :content {:ref       hash
+                             :ref-short short
+                             :version   version
+                             :rev-count rev-count
+                             :dirty?    (boolean status)}})
     (b/write-file {:path    "gen-resources/build/version.edn"
                    :content {:ref       hash
                              :ref-short short
