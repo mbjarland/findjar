@@ -1,0 +1,9 @@
+{:paths   ["src"]                                           ;; project paths
+ :deps    {org.clojure/clojure   {:mvn/version "1.11.1"}
+           org.clojure/tools.cli {:mvn/version "1.0.214"}
+           jansi-clj/jansi-clj   {:mvn/version "1.0.1"}
+           com.taoensso/tufte    {:mvn/version "2.4.5"}}    ;; project deps
+ ;; Run with clj -T:build function-in-build-dot-clj
+ :aliases {:build {:deps       {io.github.clojure/tools.build {:git/tag "v0.8.4" :git/sha "8c3cd69"}}
+                   :ns-default build}
+           :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}}}}

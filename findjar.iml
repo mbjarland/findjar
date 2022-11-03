@@ -1,33 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module cursive.leiningen.project.LeiningenProjectsManager.displayName="mbjarland/findjar:1.0.2" cursive.leiningen.project.LeiningenProjectsManager.isLeinModule="true" type="JAVA_MODULE" version="4">
+<module type="JAVA_MODULE" version="4">
   <component name="BuildSystem">
-    <option name="buildSystemId" value="LEININGEN" />
-    <option name="displayName" value="mbjarland/findjar:1.0.4" />
+    <option name="buildSystemId" value="CLOJURE_DEPS" />
+    <option name="displayName" value="findjar" />
   </component>
-  <component name="NewModuleRootManager">
-    <output url="file://$MODULE_DIR$/target/classes" />
-    <output-test url="file://$MODULE_DIR$/target/classes" />
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/dev-resources" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/gen-resources" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/resources" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/test" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/.clj-kondo" />
+      <excludeFolder url="file://$MODULE_DIR$/.cpcache" />
+      <excludeFolder url="file://$MODULE_DIR$/.idea" />
+      <excludeFolder url="file://$MODULE_DIR$/depr" />
+      <excludeFolder url="file://$MODULE_DIR$/projectFilesBackup" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/tmp" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="Leiningen: clojure-complete:0.2.5" level="project" />
-    <orderEntry type="library" name="Leiningen: com.taoensso/encore:3.24.0" level="project" />
-    <orderEntry type="library" name="Leiningen: com.taoensso/truss:1.6.0" level="project" />
-    <orderEntry type="library" name="Leiningen: com.taoensso/tufte:2.3.0" level="project" />
-    <orderEntry type="library" name="Leiningen: jansi-clj:1.0.1" level="project" />
-    <orderEntry type="library" name="Leiningen: nrepl:0.6.0" level="project" />
-    <orderEntry type="library" name="Leiningen: org.clojure/clojure:1.11.1" level="project" />
-    <orderEntry type="library" name="Leiningen: org.clojure/core.specs.alpha:0.2.62" level="project" />
-    <orderEntry type="library" name="Leiningen: org.clojure/spec.alpha:0.3.218" level="project" />
-    <orderEntry type="library" name="Leiningen: org.clojure/tools.cli:1.0.214" level="project" />
-    <orderEntry type="library" name="Leiningen: org.clojure/tools.reader:1.3.6" level="project" />
-    <orderEntry type="library" name="Leiningen: org.fusesource.jansi/jansi:2.4.0" level="project" />
+    <orderEntry type="library" name="Deps: org.clojure/clojure:1.11.1" level="project" />
+    <orderEntry type="library" name="Deps: org.clojure/core.specs.alpha:0.2.62" level="project" />
+    <orderEntry type="library" name="Deps: org.clojure/spec.alpha:0.3.218" level="project" />
+    <orderEntry type="library" name="Deps: org.clojure/tools.cli:1.0.214" level="project" />
+    <orderEntry type="library" name="Deps: com.taoensso/encore:3.31.0" level="project" />
+    <orderEntry type="library" name="Deps: com.taoensso/tufte:2.4.5" level="project" />
+    <orderEntry type="library" name="Deps: jansi-clj:1.0.1" level="project" />
+    <orderEntry type="library" name="Deps: org.slf4j/slf4j-simple:1.7.36" level="project" />
+    <orderEntry type="library" name="Deps: org.fusesource.jansi/jansi:2.4.0" level="project" />
+    <orderEntry type="library" name="Deps: com.taoensso/truss:1.6.0" level="project" />
+    <orderEntry type="library" name="Deps: org.clojure/tools.reader:1.3.6" level="project" />
+    <orderEntry type="library" name="Deps: org.slf4j/slf4j-api:1.7.36" level="project" />
   </component>
 </module>

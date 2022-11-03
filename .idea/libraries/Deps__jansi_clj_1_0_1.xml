@@ -1,5 +1,5 @@
 <component name="libraryTable">
-  <library name="Leiningen: jansi-clj:1.0.1">
+  <library name="Deps: jansi-clj:1.0.1">
     <CLASSES>
       <root url="jar://$MAVEN_REPOSITORY$/jansi-clj/jansi-clj/1.0.1/jansi-clj-1.0.1.jar!/" />
     </CLASSES>
