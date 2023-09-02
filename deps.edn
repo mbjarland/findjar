@@ -1,9 +1,12 @@
-{:paths   ["src"]                                           ;; project paths
+{:paths   ["src"]
  :deps    {org.clojure/clojure   {:mvn/version "1.11.1"}
-           org.clojure/tools.cli {:mvn/version "1.0.214"}
+           org.clojure/tools.cli {:mvn/version "1.0.219"}
            jansi-clj/jansi-clj   {:mvn/version "1.0.1"}
-           com.taoensso/tufte    {:mvn/version "2.4.5"}}    ;; project deps
- ;; Run with clj -T:build function-in-build-dot-clj
- :aliases {:build {:deps       {io.github.clojure/tools.build {:git/tag "v0.8.4" :git/sha "8c3cd69"}}
+           com.taoensso/tufte    {:mvn/version "2.6.1"}}
+
+ :aliases {;; run with clj -T:build function-in-build-dot-clj
+           :build {:deps       {io.github.clojure/tools.build {:git/tag "v0.9.5" :git/sha "24f2894"}}
                    :ns-default build}
+           ;; nrepl alias here to support repl work with build.clj - see that
+           ;; file for details
            :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}}}}

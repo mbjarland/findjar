@@ -1,11 +1,15 @@
-(ns findjar.main
+(ns ^{:doc    "The main namespace exposes a -main function called from java"
+      :author "Matias Bjarland"}
+  findjar.main
   (:require [clojure.java.io :as jio]
             [clojure.string :as str]
             [findjar.cli :as cli]
             [findjar.core :as c]
+            [findjar.protocols :as p]
             [jansi-clj.auto]
-            [jansi-clj.core :refer [white green red]]
-            [taoensso.tufte :refer [profile]])
+            [jansi-clj.core :refer [green red white]]
+            [taoensso.tufte :refer [profile]]
+            )
   (:import [java.io File LineNumberReader])
   (:gen-class))
 
@@ -54,9 +58,9 @@
 
 (defn content-line-count
   "returns number of lines in a content item"
-  [content-provider]
-  (content-provider
-    nil
+  [file-content]
+  (p/as-reader
+    file-content
     (fn [reader]
       (with-open [r (LineNumberReader. reader)]
         (.skip r Long/MAX_VALUE)
@@ -68,26 +72,26 @@
   (possily within a jar file), third is a boolean indicating whether the output
   of this function is intended to be written to a file (no ansi coloring to files)
   and the last argument is the map of options sent into this program"
-  [content-provider path to-file? opts]
-  (content-provider
-    nil
+  [file-content path to-file? opts]
+  (p/as-reader
+    file-content
     (fn [reader]
       (with-out-str
         (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
-                 (println (style red "<<<<<<<") path)
-                 (let [max-n-len (count (str (content-line-count content-provider)))
-                       lines     (line-seq reader)
-                       grep      (:grep opts)]
-                   (doseq [[n line] (map-indexed vector lines)]
-                     (let [match-idxs (when grep (c/match-idxs grep line))
-                           line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
-                           prefix     (if to-file?
-                                        ""
-                                        (let [n-len (count (str (inc n)))
-                                              p     (str/join (repeat (- max-n-len n-len) \space))]
-                                          (str p (inc n) " ")))]
-                       (println (str (style green prefix) line)))))
-                 (println (style red ">>>>>>>")))))))
+          (println (style red "<<<<<<<") path)
+          (let [max-n-len (count (str (content-line-count file-content)))
+                lines     (line-seq reader)
+                grep      (:grep opts)]
+            (doseq [[n line] (map-indexed vector lines)]
+              (let [match-idxs (when grep (c/match-idxs grep line))
+                    line       (if match-idxs (highlight-matches true line match-idxs red opts) line)
+                    prefix     (if to-file?
+                                 ""
+                                 (let [n-len (count (str (inc n)))
+                                       p     (str/join (repeat (- max-n-len n-len) \space))]
+                                   (str p (inc n) " ")))]
+                (println (str (style green prefix) line)))))
+          (println (style red ">>>>>>>")))))))
 
 (defn default-output
   "returns an implementation of the FindJarOutput protocol. This moves all
@@ -95,11 +99,11 @@
   It also makes the rest of the code more testable and makes it possible for
   users of this code to modify the behavior by supplying their own handler"
   []
-  (reify c/FindJarOutput
+  (reify p/FindJarOutput
     (warn [_ msg ex opts]
       (binding [*use-colors* (use-colors? opts)]
-               ;(.printStackTrace ex)
-               (println (style red (str "WARN:" msg)))))
+        (throw ex)
+        (println (style red (str "WARN:" msg)))))
 
     (match [_ path opts]
       (println path))
@@ -113,17 +117,17 @@
             len       (count (str display-#))
             pad       (str/join (repeat (inc (- max len)) \space))]
         (binding [*use-colors* (use-colors? opts)]
-                 (println (str (str/trim path)
-                               (if (and (not hit?) context?) " " ":")
-                               display-#
-                               pad
-                               (highlight-matches hit? line match-idxs red opts))))))
+          (println (str (str/trim path)
+                        (if (and (not hit?) context?) " " ":")
+                        display-#
+                        pad
+                        (highlight-matches hit? line match-idxs red opts))))))
 
     (dump-stream
-      [_ path content-provider opts]
+      [_ path file-content opts]
       (let [^File of (:out-file opts)
             to-file? (not (nil? of))
-            str      (content-string content-provider path to-file? opts)]
+            str      (content-string file-content path to-file? opts)]
         ;(binding [*out* *err*]
         ;  (prn :strlen (count str) :f path))
         (when str                                           ;str is nil if there was an issue reading file
@@ -135,7 +139,7 @@
 
     (print-hash [_ path hash-type hash-value opts]
       (binding [*use-colors* (use-colors? opts)]
-               (println (style white hash-value) path)))))
+        (println (style white hash-value) path)))))
 
 (taoensso.tufte/add-basic-println-handler! {})
 
@@ -183,9 +187,13 @@
              )
 
   ; test hashing
-  (repl-main "tmp"
-             "-s" "md5"
-             "-s" "sha1"
+  (repl-main (str (System/getenv "HOME") "/.m2")
+             "-p"
+             "clojure.*.java$"
+             "-g"
+             "Hickey"
+             ;"-s" "md5"
+             ;"-s" "sha1"
              ;"--profile"
              )
 
@@ -195,10 +203,19 @@
              "-c"
              "--profile")
 
-
+  ;; test grepping
   (repl-main "."
              "-n" "main.clj"
              "-g" "main.clj")
+
+  ;; test cat
+  (repl-main (str (get (System/getenv) "HOME") "/.m2")
+             "-p"
+             "clojure-[\\.0-9]+.jar.*java.clj"
+             "-g"
+             "Hickey"
+             "-c")
+
 
   ;; parse a real set of opts
   (cli/parse-opts ["." "-n" ".clj" "-t" "d"]

@@ -7,17 +7,16 @@
             [findjar.core :as c]
             [jansi-clj.auto]
             [jansi-clj.core :as ansi])
-  (:gen-class)
   (:import [java.io PushbackReader]
            [java.text SimpleDateFormat]
-           [java.util Date]))
+           [java.util Date])
+  (:gen-class))
 
-(def MAX_WIDTH 78)
+(def max-width 78)
 
 (defn multimethod-meta [multi]
   (reduce
-    (fn [a [k v]]
-      (assoc a k (v {})))
+    (fn [a [k v]] (assoc a k (v {})))
     {}
     (methods multi)))
 
@@ -43,10 +42,9 @@
   []
   (reduce
     (fn [a [k v]]
-      (assoc a (:char v)
-        {:desc    (:desc v)
-         :default (:default v)
-         :ext     k}))
+      (assoc a (:char v) {:desc    (:desc v)
+                          :default (:default v)
+                          :ext     k}))
     {}
     (multimethod-meta c/file-finder)))
 
@@ -117,9 +115,12 @@
           date          (.format format (Date. ^Long (* timestamp 1000)))]
       (str version " - " ref-short " - " date (if dirty? " +" "")))))
 
+;; TODO: add search-by-hash param
+;; TODO: add -d output directory when using c
+
 (defn cli-options []
   (reformat-options
-    MAX_WIDTH
+    max-width
     [;; First three strings describe a short-option, long-option with optional
      ;; example argument description, and a description. All three are optional
      ;; and positional.
@@ -240,7 +241,7 @@
          "Options:"]
         lines
         (map un-whitespace lines)
-        (map #(wrap-line MAX_WIDTH %) lines)
+        (map #(wrap-line max-width %) lines)
         (str/join \newline lines)
         (str lines "\n" summary "\n")))
 
