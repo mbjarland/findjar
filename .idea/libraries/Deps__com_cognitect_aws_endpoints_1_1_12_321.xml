@@ -1,9 +1,0 @@
-<component name="libraryTable">
-  <library name="Deps: com.cognitect.aws/endpoints:1.1.12.321">
-    <CLASSES>
-      <root url="jar://$MAVEN_REPOSITORY$/com/cognitect/aws/endpoints/1.1.12.321/endpoints-1.1.12.321.jar!/" />
-    </CLASSES>
-    <JAVADOC />
-    <SOURCES />
-  </library>
-</component>
