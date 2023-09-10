@@ -14,24 +14,24 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: cache clj deps
-        id: cache-clj-deps
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-build-clj-deps-${{ hashFiles('deps.edn') }}
+      id: cache-clj-deps
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-build-clj-deps-${{ hashFiles('deps.edn') }}
     - name: install clojure
-        run: |
-            curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
-            chmod +x linux-install.sh
-            sudo ./linux-install.sh
+      run: |
+          curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
+          chmod +x linux-install.sh
+          sudo ./linux-install.sh
     - name: execute tests
       run: clojure -M:test
     - name: build uberjar
       run: clojure -T:build uber
     - name: archive uberjarß
-        uses: actions/upload-artifact@v3
-        with:
-          name: dist-without-markdown
-          path: |
-            target
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist-without-markdown
+        path: |
+          target
 
