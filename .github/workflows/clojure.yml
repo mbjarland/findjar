@@ -13,7 +13,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install clojure
+      run: |
+          curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
+          chmod +x linux-install.sh
+          sudo ./linux-install.sh
     - name: Execute tests
-      run: clj -M:test
+      run: clojure -M:test
     - name: Build uberjar
-      run: clj -T:build uber
+      run: clojure -T:build uber
