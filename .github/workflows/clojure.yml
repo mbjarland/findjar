@@ -31,6 +31,6 @@ jobs:
     - name: archive uberjar
       uses: actions/upload-artifact@v3
       with:
-        name: dist-without-markdown
+        name: findjar-standalone-jar
         path: target/findjar-*-standalone.jar
 
