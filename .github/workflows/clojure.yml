@@ -19,6 +19,6 @@ jobs:
           chmod +x linux-install.sh
           sudo ./linux-install.sh
     - name: Execute tests
-      run: clj -M:test
+      run: clojure -M:test
     - name: Build uberjar
-      run: clj -T:build uber
+      run: clojure -T:build uber
