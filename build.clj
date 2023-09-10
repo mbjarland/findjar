@@ -40,4 +40,5 @@
   (b/uber {:class-dir class-dir
            :uber-file uber-file
            :basis     basis
-           :main      'findjar.main}))
+           :main      'findjar.main})
+  (println "> uberjar created at" uber-file))
