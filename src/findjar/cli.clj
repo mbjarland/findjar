@@ -13,55 +13,70 @@
            [org.fusesource.jansi Ansi])
   (:gen-class))
 
-(def max-width 78)
+(def max-width 78)                                               ; max width to wrap the cli help section at
 
-(defn multimethod-meta [multi]
+(defn multimethod-meta
+  "given a multimethod, extract meta data from it and return a
+   map where the keys are the dispatch values and the values
+   are maps describing that method for the cli"
+  [multi]
   (reduce
     (fn [a [k v]] (assoc a k (v {})))
     {}
     (methods multi)))
 
-(defn hash-selectors []
+(defn hash-selectors
+  "returns a string with a comma separated list of the currently
+  registered (via multimethod) hash functions"
+  []
   (str/join
     ", "
     (map (fn [[_ v]] (:desc v))
          (multimethod-meta c/calculate-hash))))
 
-(defn parse-hash-desc [desc]
-  (let [m (reduce
-            (fn [a [k v]] (assoc a (:desc v) k))
-            {}
-            (multimethod-meta c/calculate-hash))]
-    (m desc)))
+(defn parse-hash-selector
+  "parse a hash selector (sha1, md5) string from the cli into
+  the dispatch value used by the multimethod"
+  [selector]
+  (some (fn [[k {desc :desc}]] (when (= desc selector) k))
+        (multimethod-meta c/calculate-hash)))
 
 (defn file-types
-  "Produces a map on the following form:
+  "produces a map on the following form:
   {\\d {:desc \"files on disk\", :default true, :ext :default},
    \\j {:desc \"files in jar files\", :default true, :ext \"jar\"},
    \\z {:desc \"files in zip files\", :default false, :ext \"zip\"}}
    pulls the data from the multimethod defined for file types"
   []
-  (reduce
-    (fn [a [k v]]
+  (reduce-kv
+    (fn [a k v]
       (assoc a (:char v) {:desc    (:desc v)
                           :default (:default v)
                           :ext     k}))
     {}
     (multimethod-meta c/file-finder)))
 
-(defn file-type-selectors []
+(defn file-type-selectors
+  "returns a string containing a list of file type selectors to
+  be displayed in the cli help"
+  []
   (str/join "|" (keys (file-types))))
 
-(defn file-type-descriptions []
+(defn file-type-descriptions
+  "returns a display string containing the file type selectors registered by
+  the multi method"
+  []
   (str/join ", "
             (map
               (fn [[k v]] (str k " - " (:desc v)))
               (file-types))))
 
-(defn default-file-types []
-  (filter
-    (fn [[_ v]] (:default v))
-    (file-types)))
+(defn default-file-types
+  "returns a list containing the file types searched by default when no
+  modifying switches are provided on the cli"
+  []
+  (filter (fn [[_ v]] (:default v))
+          (file-types)))
 
 (defn default-file-type-exts []
   (set (mapv (fn [[_ v]] (:ext v)) (default-file-types))))
@@ -173,7 +188,7 @@
      ["-s" "--hash <algo>"
       (str "calculate file hash(es) for matched files. Available algorithms: "
            (hash-selectors))
-      :parse-fn parse-hash-desc
+      :parse-fn parse-hash-selector
       :assoc-fn (fn [m k v] (update-in m [k] #(into [] (conj % v))))
       :validate [#(boolean %) (str "hash must be one of " (hash-selectors) "!")]]
 
@@ -390,7 +405,7 @@
   your user-supplied :summary-fn option) on the compiled option specs."
   [specs]
   (if (seq specs)
-    (let [show-defaults? false                              ;(some #(and (:required %) (contains? % :default)) specs)
+    (let [show-defaults? false                                   ;(some #(and (:required %) (contains? % :default)) specs)
           parts          (map (partial cli/make-summary-part show-defaults?) specs)
           lens           (apply map (fn [& cols] (apply max (map count cols))) parts)
           lines          (cli/format-lines lens parts)]
@@ -419,10 +434,10 @@
         search-root (jio/file (first arguments))]
     (cond
       (:examples options)
-      {:exit-message (examples options) :ok? true}          ; examples => exit OK with examples
+      {:exit-message (examples options) :ok? true}               ; examples => exit OK with examples
 
       (:help options)
-      {:exit-message (usage summary) :ok? true}             ; help => exit OK with usage summary
+      {:exit-message (usage summary) :ok? true}                  ; help => exit OK with usage summary
 
       ;(and (:out-file options)
       ;     (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
@@ -432,7 +447,7 @@
       (fail "can not use path (-p) and apath (-a) together")
 
       errors
-      {:exit-message (error-msg errors summary)}            ; errors => exit with description of errors
+      {:exit-message (error-msg errors summary)}                 ; errors => exit with description of errors
 
       (= 0 (count arguments))
       (fail "no search root provided")
@@ -444,7 +459,7 @@
       (fail (str "invalid non-directory search root: " search-root))
 
       :else {:search-root search-root
-             :opts        options})))                       ; failed custom validation => exit with usage summary
+             :opts        options})))                            ; failed custom validation => exit with usage summary
 
 (defn exit [status msg]
   (println msg)

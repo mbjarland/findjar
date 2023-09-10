@@ -7,6 +7,8 @@
  :aliases {;; run with clj -T:build function-in-build-dot-clj
            :build {:deps       {io.github.clojure/tools.build {:git/tag "v0.9.5" :git/sha "24f2894"}}
                    :ns-default build}
-           ;; nrepl alias here to support repl work with build.clj - see that
-           ;; file for details
-           :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}}}}
+           ;; alias to support repl work with build.clj - see that file for details
+           :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}}
+           ;; run tests with clj -M:test 
+           :test  {:main-opts  ["-m" "kaocha.runner"]
+                   :extra-deps {lambdaisland/kaocha {:mvn/version "1.86.1355"}}}}}
