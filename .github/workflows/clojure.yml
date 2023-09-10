@@ -28,10 +28,9 @@ jobs:
       run: clojure -M:test
     - name: build uberjar
       run: clojure -T:build uber
-    - name: archive uberjarß
+    - name: archive uberjar
       uses: actions/upload-artifact@v3
       with:
         name: dist-without-markdown
-        path: |
-          target
+        path: target/findjar-*-standalone.jar
 
