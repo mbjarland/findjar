@@ -31,6 +31,7 @@ jobs:
           curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
           chmod +x linux-install.sh
           sudo ./linux-install.sh --prefix ${CLJ_PATH}
+          echo "CLJ PATH IS: ${CLJ_PATH}"
           echo "CLJ HASH IS: ${CLJ_HASH}"
       - name: add clojure to path
         run: echo "$HOME/clojure/bin" >> $GITHUB_PATH
