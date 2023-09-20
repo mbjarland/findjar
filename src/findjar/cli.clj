@@ -192,61 +192,65 @@
       "--help"
       "show usage information"]]))
 
-(defn usage [summary]
-  (as-> [""
-         "findjar - a tool for searching through files, including files inside jars"
-         ""
-         "usage: findjar <search-root> [-p <path-pattern>] [-g <content-pattern>]  [...]"
-         ""
-         "findjar searches for files/content in any disk structure. It is capable of
-         looking both for/in normal files and also for/in files inside
-          zip/jar files. It is capable of regex matching both for file name/path
-          and for content within the files."
-         ""
-         "This tool is in essence an improvement of the unix find command
-          geared towards solving a common problem for programmers on the JVM:
-          finding that specific file or class in your maven repo, classpath, etc
-          when that file can reside either directly on disk or inside a jar archive."
-         ""
-         "Note that this tool is capable of a few extra tricks such as writing
-          out the contents of matched files inside jar files and calculating
-          md5 or sha1 hashes of matched files inside jar files."
-         ""
-         "For regular files the path pattern (-p) matches against the entire path,"
-         "including the file name, i.e.:"
-         ""
-         "   ~> findjar ~/.m2 -p '.*asm/asm/3.2.*pom'"
-         ""
-         "   repository/asm/asm/3.2/asm-3.2.pom"
-         ""
-         "whereas for files within jar files, the path pattern matches the string:"
-         ""
-         "   <path-to-jar-file>@<path-within-jar-file>"
-         ""
-         "i.e:"
-         ""
-         "   ~> findjar ~/.m2 -p '.*asm/asm.*Edge.class'"
-         ""
-         "   repository/asm/asm/3.2/asm-3.2.jar@org/objectweb/asm/Edge.class"
-         ""
-         "Command line switches can be provided either using short form i.e. '-t j'
-          or long form i.e. '--type j'."
-         ""
-         "For usage examples, run: ~> findjar --examples"
-         ""
-         "Author: Matias Bjarland / mbjarland@gmail.com"
-         "        Copyright (c) 2022 - Iteego AB"
-         ""
-         (str "findjar " (version-string))
-         ""
-         "Options:"]
-        lines
-        (map un-whitespace lines)
-        (map #(wrap-line max-width %) lines)
-        (str/join \newline lines)
-        (str lines "\n" summary "\n")))
+(def usage-text
+  [""
+   "findjar - a tool for searching through files, including files inside jars"
+   ""
+   "usage: findjar <search-root> [-p <path-pattern>] [-g <content-pattern>]  [...]"
+   ""
+   "findjar searches for files/content in any disk structure. It is capable of
+   looking both for/in normal files and also for/in files inside
+    zip/jar files. It is capable of regex matching both for file name/path
+    and for content within the files."
+   ""
+   "This tool is in essence an improvement of the unix find command
+    geared towards solving a common problem for programmers on the JVM:
+    finding that specific file or class in your maven repo, classpath, etc
+    when that file can reside either directly on disk or inside a jar archive."
+   ""
+   "Note that this tool is capable of a few extra tricks such as writing
+    out the contents of matched files inside jar files and calculating
+    md5 or sha1 hashes of matched files inside jar files."
+   ""
+   "For regular files the path pattern (-p) matches against the entire path,"
+   "including the file name, i.e.:"
+   ""
+   "   ~> findjar ~/.m2 -p '.*asm/asm/3.2.*pom'"
+   ""
+   "   repository/asm/asm/3.2/asm-3.2.pom"
+   ""
+   "whereas for files within jar files, the path pattern matches the string:"
+   ""
+   "   <path-to-jar-file>@<path-within-jar-file>"
+   ""
+   "i.e:"
+   ""
+   "   ~> findjar ~/.m2 -p '.*asm/asm.*Edge.class'"
+   ""
+   "   repository/asm/asm/3.2/asm-3.2.jar@org/objectweb/asm/Edge.class"
+   ""
+   "Command line switches can be provided either using short form i.e. '-t j'
+    or long form i.e. '--type j'."
+   ""
+   "For usage examples, run: ~> findjar --examples"
+   ""
+   "Author: Matias Bjarland / mbjarland@gmail.com"
+   "        Copyright (c) 2022 - Iteego AB"
+   ""
+   (str "findjar " (version-string))
+   ""
+   "Options:"])
 
-(defn render-optionally
+(defn usage [summary]
+  (let [append-summary #(str % "\n" summary "\n")]
+    (->> usage-text
+         (map un-whitespace)
+         (map #(wrap-line max-width %))
+         (str/join \newline)
+         (append-summary))))
+
+
+(defn colorize
   "renders a line of text, optionally using ansi colors if :monochrome is unset in
   the first argument opts"
   [{:keys [monochrome] :as opts} line]
@@ -256,125 +260,127 @@
     (Ansi/setEnabled old-value)
     line))
 
+(def examples-text
+  [""
+   "Examples:"
+   ""
+   "(some paths etc have been omitted/abbreviated for brevity)"
+   ""
+   "  1. list all files in maven cache (~/.m2), both directly on disk and "
+   "     within jar files:"
+   ""
+   "     @|bold ~> findjar ~/.m2|@"
+   ""
+   "     .../1.6.1/nightlight-1.6.1.pom"
+   "     .../1.6.1/nightlight-1.6.1.jar.sha1"
+   "     .../1.6.1/nightlight-1.6.1.jar@META-INF/.../nightlight/pom.properties"
+   "     ..."
+   ""
+   "  2. list all files where file name (-n) matches pattern, both directly on disk"
+   "     and within jar files:"
+   ""
+   "     @|bold ~> findjar ~/.m2 -n \"string.clj\"|@"
+   ""
+   "     .../clojure-1.9.0.jar@clojure/string.clj"
+   "     .../clojure-1.7.0.jar@clojure/string.clj"
+   "     .../clojure-1.8.0.jar@clojure/string.clj"
+   "     ...octet-1.1.0.jar@octet/spec/string.cljc"
+   "     ..."
+   ""
+   "  3. list all files where both file name (-n) and a line in the file "
+   "     content (-g) matches pattern. Print out matching lines with line "
+   "     numbers, highlight intra-line content matches. Search only files "
+   "     within jar files (-t) (ignore normal, directly on disk files):"
+   ""
+   "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -g \"author.*Rich Hickey\" -t j|@"
+   ""
+   "     .../clojure-1.9.0.jar@clojure/set.clj:10       :@|red author \"Rich Hickey|@\"}"
+   "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :@|red author \"Rich Hickey|@\"}"
+   "     .../clojure-1.9.0.jar@clojure/inspector.clj:10  :@|red author \"Rich Hickey|@\"}"
+   "     .../clojure-1.9.0.jar@clojure/xml.clj:10       :@|red author \"Rich Hickey|@\"}"
+   "     ..."
+   ""
+   "    (with the matched string highlighted)"
+   ""
+   "  4. same as above, but include one surrounding line of \"context\" (-x)"
+   "     when printing the matching lines:"
+   ""
+   "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -g \"Rich Hickey\" -t j -x 1|@"
+   ""
+   "     .../clojure-1.9.0.jar@clojure/set.clj 9  (ns ^{:doc \"Set operations..."
+   "     .../clojure-1.9.0.jar@clojure/set.clj:10        :@|red author \"Rich Hickey|@\"}"
+   "     .../clojure-1.9.0.jar@clojure/set.clj 11        clojure.set)"
+   "     .../clojure-1.9.0.jar@clojure/zip.clj 13   and enumeration.  See Huet"
+   "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :@|red author \"Rich Hickey|@\"}"
+   "     .../clojure-1.9.0.jar@clojure/zip.clj 15   clojure.zip"
+   "     ..."
+   ""
+   "    (with the matched string highlighted)"
+   ""
+   "  5. find all files where name (-n) matches pattern and dump (-c) them on"
+   "     stdout, search both directly on disk and within jar files:"
+   ""
+   "     @|bold ~> findjar clojure/1.9.0 -n \"MANIFEST.MF\" -c|@"
+   ""
+   "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/MANIFEST.MF"
+   "     @|green 1|@ Manifest-Version: 1.0"
+   "     @|green 2|@ Archiver-Version: Plexus Archiver"
+   "     @|green 3|@ Created-By: Apache Maven"
+   "     @|green 4|@ Built-By: jenkins"
+   "     @|green 5|@ Build-Jdk: 1.7.0"
+   "     @|green 6|@ Main-Class: clojure.main"
+   "     @|green 7|@"
+   "     @|red >>>>>>>|@"
+   ""
+   "  6. find all files where content (-g) matches pattern and dump (-c) them "
+   "     on stdout, intra-line highlight the matching content lines, search "
+   "     both directly on disk and within jar files:"
+   ""
+   "     @|bold ~> findjar clojure/1.9.0 -g \"Plexus\" -c|@"
+   ""
+   "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/MANIFEST.MF"
+   "     @|green 1|@ Manifest-Version: 1.0"
+   "     @|green 2|@ Archiver-Version: @|red Plexus|@ Archiver"
+   "     @|green 3|@ Created-By: Apache Maven"
+   "     @|green 4|@ Built-By: jenkins"
+   "     @|green 5|@ Build-Jdk: 1.7.0"
+   "     @|green 6|@ Main-Class: clojure.main"
+   "     @|green 7|@"
+   "     @|red >>>>>>>|@"
+   ""
+   "    (with the word \"Plexus\" on line 2 highlighted)"
+   ""
+   "  7. find all files where both file name (-n) and content (-g) matches pattern"
+   "     and dump them on stdout:"
+   ""
+   "     @|bold ~> findjar clojure/1.9.0 -n \"properties\" -g \"groupId\" -c|@"
+   ""
+   "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/...clojure/pom.properties"
+   "     @|green 1|@ #Generated by Maven"
+   "     @|green 2|@ #Fri Dec 08 08:01:54 CST 2017"
+   "     @|green 3|@ version=1.9.0"
+   "     @|green 4|@ @|green groupId|@=org.clojure"
+   "     @|green 5|@ artifactId=clojure"
+   "     @|red >>>>>>>|@"
+   ""
+   "    (with the word \"groupId\" on line 4 highlighted)"
+   ""
+   "  8. find all files where name (-n) matches pattern and calculate "
+   "     sha1 and md5 hash (-s) for them:"
+   ""
+   "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -s sha1 -s md5|@"
+   ""
+   "     ...94a86681b58d556f1eb13a clojure-1.9.0.jar@clojure/string.clj"
+   "     ...f05f65fa44628a95497032 clojure-1.9.0.jar@clojure/set.clj"
+   "     ...7444756fa91b65 clojure-1.9.0.jar@clojure/string.clj"
+   "     ...95aaa8c6e9af74 clojure-1.9.0.jar@clojure/set.clj"
+   ""])
+
 (defn examples [opts]
-  (as-> [""
-         "Examples:"
-         ""
-         "(some paths etc have been omitted/abbreviated for brevity)"
-         ""
-         "  1. list all files in maven cache (~/.m2), both directly on disk and "
-         "     within jar files:"
-         ""
-         "     @|bold ~> findjar ~/.m2|@"
-         ""
-         "     .../1.6.1/nightlight-1.6.1.pom"
-         "     .../1.6.1/nightlight-1.6.1.jar.sha1"
-         "     .../1.6.1/nightlight-1.6.1.jar@META-INF/.../nightlight/pom.properties"
-         "     ..."
-         ""
-         "  2. list all files where file name (-n) matches pattern, both directly on disk"
-         "     and within jar files:"
-         ""
-         "     @|bold ~> findjar ~/.m2 -n \"string.clj\"|@"
-         ""
-         "     .../clojure-1.9.0.jar@clojure/string.clj"
-         "     .../clojure-1.7.0.jar@clojure/string.clj"
-         "     .../clojure-1.8.0.jar@clojure/string.clj"
-         "     ...octet-1.1.0.jar@octet/spec/string.cljc"
-         "     ..."
-         ""
-         "  3. list all files where both file name (-n) and a line in the file "
-         "     content (-g) matches pattern. Print out matching lines with line "
-         "     numbers, highlight intra-line content matches. Search only files "
-         "     within jar files (-t) (ignore normal, directly on disk files):"
-         ""
-         "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -g \"author.*Rich Hickey\" -t j|@"
-         ""
-         "     .../clojure-1.9.0.jar@clojure/set.clj:10       :@|red author \"Rich Hickey|@\"}"
-         "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :@|red author \"Rich Hickey|@\"}"
-         "     .../clojure-1.9.0.jar@clojure/inspector.clj:10  :@|red author \"Rich Hickey|@\"}"
-         "     .../clojure-1.9.0.jar@clojure/xml.clj:10       :@|red author \"Rich Hickey|@\"}"
-         "     ..."
-         ""
-         "    (with the matched string highlighted)"
-         ""
-         "  4. same as above, but include one surrounding line of \"context\" (-x)"
-         "     when printing the matching lines:"
-         ""
-         "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -g \"Rich Hickey\" -t j -x 1|@"
-         ""
-         "     .../clojure-1.9.0.jar@clojure/set.clj 9  (ns ^{:doc \"Set operations..."
-         "     .../clojure-1.9.0.jar@clojure/set.clj:10        :@|red author \"Rich Hickey|@\"}"
-         "     .../clojure-1.9.0.jar@clojure/set.clj 11        clojure.set)"
-         "     .../clojure-1.9.0.jar@clojure/zip.clj 13   and enumeration.  See Huet"
-         "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :@|red author \"Rich Hickey|@\"}"
-         "     .../clojure-1.9.0.jar@clojure/zip.clj 15   clojure.zip"
-         "     ..."
-         ""
-         "    (with the matched string highlighted)"
-         ""
-         "  5. find all files where name (-n) matches pattern and dump (-c) them on"
-         "     stdout, search both directly on disk and within jar files:"
-         ""
-         "     @|bold ~> findjar clojure/1.9.0 -n \"MANIFEST.MF\" -c|@"
-         ""
-         "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/MANIFEST.MF"
-         "     @|green 1|@ Manifest-Version: 1.0"
-         "     @|green 2|@ Archiver-Version: Plexus Archiver"
-         "     @|green 3|@ Created-By: Apache Maven"
-         "     @|green 4|@ Built-By: jenkins"
-         "     @|green 5|@ Build-Jdk: 1.7.0"
-         "     @|green 6|@ Main-Class: clojure.main"
-         "     @|green 7|@"
-         "     @|red >>>>>>>|@"
-         ""
-         "  6. find all files where content (-g) matches pattern and dump (-c) them "
-         "     on stdout, intra-line highlight the matching content lines, search "
-         "     both directly on disk and within jar files:"
-         ""
-         "     @|bold ~> findjar clojure/1.9.0 -g \"Plexus\" -c|@"
-         ""
-         "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/MANIFEST.MF"
-         "     @|green 1|@ Manifest-Version: 1.0"
-         "     @|green 2|@ Archiver-Version: @|red Plexus|@ Archiver"
-         "     @|green 3|@ Created-By: Apache Maven"
-         "     @|green 4|@ Built-By: jenkins"
-         "     @|green 5|@ Build-Jdk: 1.7.0"
-         "     @|green 6|@ Main-Class: clojure.main"
-         "     @|green 7|@"
-         "     @|red >>>>>>>|@"
-         ""
-         "    (with the word \"Plexus\" on line 2 highlighted)"
-         ""
-         "  7. find all files where both file name (-n) and content (-g) matches pattern"
-         "     and dump them on stdout:"
-         ""
-         "     @|bold ~> findjar clojure/1.9.0 -n \"properties\" -g \"groupId\" -c|@"
-         ""
-         "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/...clojure/pom.properties"
-         "     @|green 1|@ #Generated by Maven"
-         "     @|green 2|@ #Fri Dec 08 08:01:54 CST 2017"
-         "     @|green 3|@ version=1.9.0"
-         "     @|green 4|@ @|green groupId|@=org.clojure"
-         "     @|green 5|@ artifactId=clojure"
-         "     @|red >>>>>>>|@"
-         ""
-         "    (with the word \"groupId\" on line 4 highlighted)"
-         ""
-         "  8. find all files where name (-n) matches pattern and calculate "
-         "     sha1 and md5 hash (-s) for them:"
-         ""
-         "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -s sha1 -s md5|@"
-         ""
-         "     ...94a86681b58d556f1eb13a clojure-1.9.0.jar@clojure/string.clj"
-         "     ...f05f65fa44628a95497032 clojure-1.9.0.jar@clojure/set.clj"
-         "     ...7444756fa91b65 clojure-1.9.0.jar@clojure/string.clj"
-         "     ...95aaa8c6e9af74 clojure-1.9.0.jar@clojure/set.clj"
-         ""]
-        lines
-        ;(map #(wrap-line MAX_WIDTH %) lines)
-        (map render-optionally lines)
-        (str/join \newline lines)))
+  (->> examples-text
+       ;(map #(wrap-line MAX_WIDTH %) lines)
+       (map #(colorize opts %))
+       (str/join \newline)))
 
 (defn error-msg [errors summary]
   (str (usage summary)
@@ -407,9 +413,7 @@
       (apply str (concat (butlast xs) ["and " (last xs)])))))
 
 (defn validate-args
-  "Validate command line arguments. Either return a map indicating the program
-  should exit (with an error message, and optional ok status), or a map
-  indicating the action the program should take and the options provided."
+  "Parse and validate command line arguments and execute accordingly."
   [args]
   (let [parsed      (cli/parse-opts args (cli-options)
                                     :strict true
