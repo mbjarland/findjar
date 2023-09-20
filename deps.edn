@@ -4,7 +4,7 @@
            jansi-clj/jansi-clj   {:mvn/version "1.0.1"}
            com.taoensso/tufte    {:mvn/version "2.6.1"}}
 
- :aliases {;; run with clj -T:build function-in-build-dot-clj
+ :aliases {;; run with clj -T:build function-in-build-dot-clj, e.g. clj -T:build uber
            :build {:deps       {io.github.clojure/tools.build {:git/tag "v0.9.5" :git/sha "24f2894"}}
                    :ns-default build}
            ;; alias to support repl work with build.clj - see that file for details
