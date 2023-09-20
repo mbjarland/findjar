@@ -19,22 +19,14 @@ jobs:
         id: cache-clj-deps
         uses: actions/cache@v3
         with:
-          path: |
-            ~/.m2
-            ~/clojure
+          path: ~/.m2
           key: ${{ runner.os }}-build-clj-deps-${{ hashFiles('deps.edn') }}
-      - name: install clojure if needed
-        if: ${{ hashFiles(format('{0}/bin/clojure', env.CLJ_PATH)) == '' }}
-        env:
-          CLJ_HASH: ${{ hashFiles(format('{0}/bin/clojure', env.CLJ_PATH)) }}
+      - name: install clojure
         run: |
           curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
           chmod +x linux-install.sh
           sudo ./linux-install.sh --prefix ${CLJ_PATH}
-          echo "CLJ PATH IS: ${CLJ_PATH}"
-          echo "CLJ HASH IS: ${CLJ_HASH}"
-      - name: add clojure to path
-        run: echo "$HOME/clojure/bin" >> $GITHUB_PATH
+          echo "$HOME/clojure/bin" >> $GITHUB_PATH
       - name: execute tests
         run: clojure -M:test
       - name: build uberjar
