@@ -24,9 +24,9 @@ jobs:
         id: clojure_installed
         uses: andstor/file-existence-action@v1
         with:
-          files: "${{HOME}}/clojure/bin/clojure"
+          files: "/home/runner/clojure/bin/clojure"
       - name: Install clojure
-        if: steps.check_files.outputs.files_exists != 'true'
+        if: steps.clojure_installed.outputs.files_exists != 'true'
         run: |
           curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
           chmod +x linux-install.sh
