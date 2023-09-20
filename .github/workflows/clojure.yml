@@ -20,13 +20,8 @@ jobs:
             ~/.m2
             ~/clojure
           key: ${{ runner.os }}-build-clj-deps-${{ hashFiles('deps.edn') }}
-      - name: Check if clojure installed
-        id: clojure_installed
-        uses: andstor/file-existence-action@v1
-        with:
-          files: "/home/runner/clojure/bin/clojure"
-      - name: Install clojure
-        if: steps.clojure_installed.outputs.files_exists != 'true'
+      - name: install clojure if needed
+        if: ${{ hashFiles('/home/runner/clojure/bin/clojure') == '' }}
         run: |
           curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
           chmod +x linux-install.sh
