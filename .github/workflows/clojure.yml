@@ -28,8 +28,8 @@ jobs:
           sudo ./linux-install.sh --prefix ~/clojure
       - name: add clojure to path
         run: |
-          echo "$HOME/clojure/sbin" >> $GITHUB_PATH
-          echo "HASHFILES: ${{ hashFiles('${{HOME}}/clojure/bin/clojure') }}"
+          echo "$HOME/clojure/bin" >> $GITHUB_PATH
+          echo "HASHFILES: ${{ hashFiles('/home/runner/clojure/bin/clojure') }}"
       - name: execute tests
         run: clojure -M:test
       - name: build uberjar
