@@ -12,7 +12,7 @@ This tool is in essence an improvement of the unix find command geared towards s
  
 Also this tool can be useful in detecting what version a specific class file or source file inside a library jar changed between a number of versions of the library file. 
  
-Note that this tool is capable of a few extra tricks such as writing colorizing matches, printing line numbers, printing a configurable number of surrounding context lines, printing out the contents of matched files inside jar files and calculating md5 or sha1 hashes of the content of matched files inside jar files. 
+Note that this tool is capable of a few extra tricks such as colorizing matches, printing line numbers, printing a configurable number of surrounding context lines, printing out the contents of matched files inside jar files and calculating md5 or sha1 hashes of the content of matched files inside jar files. 
 
 ## Features
 
