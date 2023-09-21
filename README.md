@@ -1,12 +1,12 @@
 # findjar
 
-[![Build Status](https://github.com/mbjarland/findjar/actions/workflows/ci.yml/badge.svg)](https://github.com/mbjarland/findjar/actions)]
+[![Build Status](https://github.com/mbjarland/findjar/actions/workflows/ci.yml/badge.svg)](https://github.com/mbjarland/findjar/actions)
 [![Version](https://img.shields.io/badge/version-1.0.98-brightgreen)](https://img.shields.io/badge/version-1.0.98-brightgreen)
 [![License](https://img.shields.io/badge/License-EPL_2.0-green.svg)](https://www.eclipse.org/legal/epl-2.0/)
 
 findjar - a tool for searching through files, including files inside jars 
 
-findjar is a versatile tool designed for searching through files, with an emphasis on inspecting content inside ".jar" archives, a common challenge faced by programmers on the JVM. This tool augments the functionality of the Unix "find" command to cater to JVM specific needs, such as locating a particular class in a classpath or maven repository or figuring out which version of a library changed a specific class or source file. 
+findjar is a versatile tool designed for searching through files, with an emphasis on inspecting content inside jar/zip archives, a common challenge faced by programmers on the JVM. This tool augments the functionality of the Unix "find" command to cater to JVM specific needs, such as locating a particular class in a classpath or maven repository or figuring out which version of a library changed a specific class or source file.
 
 
 ## Features
@@ -162,6 +162,5 @@ The project is released under the [Eclipse Public License - v2.0](https://www.ec
 
 ## Author
 
-Matias Bjarland  
-📧 [mbjarland@gmail.com](mailto:mbjarland@gmail.com)
+Matias Bjarland / [mbjarland@gmail.com](mailto:mbjarland@gmail.com)
 
