@@ -35,5 +35,8 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: findjar-standalone-jar
-          path: target/findjar-*-standalone.jar
+          path: |
+            target/findjar-*-standalone.jar
+            gen-resources/build/version.edn
+            LICENSE
 
