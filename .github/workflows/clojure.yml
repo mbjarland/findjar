@@ -8,6 +8,7 @@ on:
 
 env:
   CLJ_PATH: /home/runner/clojure
+  ACTIONS_STEP_DEBUG: true
 
 jobs:
   build:
@@ -32,8 +33,6 @@ jobs:
         run: clojure -T:build uber
       - name: archive uberjar
         uses: actions/upload-artifact@v3
-        env:
-          ACTIONS_STEP_DEBUG: true
         with:
           name: findjar-standalone-jar
           path: target/findjar-*-standalone.jar
