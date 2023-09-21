@@ -1,0 +1,125 @@
+name: Clojure CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        jdk: [ 8, 11, 17, 21 ]         # Support java LTS and latest
+        clojure: [ 11 ]
+
+    name: Clojure ${{ matrix.clojure }} Java ${{ matrix.jdk }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Java ${{ matrix.jdk }}
+        uses: actions/setup-java@v3.12.0
+        with:
+          distribution: zulu
+          java-version: ${{ matrix.jdk }}
+          cache: maven
+      - name: Setup Clojure
+        uses: DeLaGuardo/setup-clojure@master
+        with:
+          cli: latest
+      - name: Cache clojure dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: cljdeps-${{ hashFiles('deps.edn', 'build.clj') }}
+          restore-keys: cljdeps-
+#      - name: Alias clojure-${{ matrix.clojure }}
+#        run: ln -s $(which clojure-${{ matrix.clojure}}) ./bobclj
+#      - name: Run tests
+#        run: CLOJURE_ALIAS=clojure-${{ matrix.clojure }} bin/kaocha
+      - name: execute tests
+        run: clojure -M:test
+      - name: build uberjar
+        run: clojure -T:build uber
+      - name: archive uberjar
+        uses: actions/upload-artifact@v3
+        with:
+          name: findjar-standalone-jar
+          path: |
+            target/findjar-*-standalone.jar
+            gen-resources/build/version.edn
+            LICENSE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+env:
+  CLJ_PATH: /home/runner/clojure
+  ACTIONS_STEP_DEBUG: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: cache clj deps
+        id: cache-clj-deps
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-build-clj-deps-${{ hashFiles('deps.edn', 'build.clj', '.github/workflows/clojure.yml') }}
+      - name: install clojure
+        run: |
+          curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
+          chmod +x linux-install.sh
+          sudo ./linux-install.sh --prefix ${CLJ_PATH}
+          echo "${CLJ_PATH}/bin" >> $GITHUB_PATH
+      - name: execute tests
+        run: clojure -M:test
+      - name: build uberjar
+        run: clojure -T:build uber
+      - name: archive uberjar
+        uses: actions/upload-artifact@v3
+        with:
+          name: findjar-standalone-jar
+          path: |
+            target/findjar-*-standalone.jar
+            gen-resources/build/version.edn
+            LICENSE
+
