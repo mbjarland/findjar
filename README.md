@@ -156,7 +156,7 @@ To retrieve examples of how to use `findjar`:
 findjar --examples
 ```
 
-or to see a browser compatible list, please refer to the [examples page](https://github.com/mbjarland/findjar#examples).
+or to see a browser compatible list, please refer to the [examples page](https://github.com/mbjarland/findjar/blob/master/examples.md).
 
 ## License
 
