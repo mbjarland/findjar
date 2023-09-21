@@ -81,7 +81,7 @@ where the the matched strings are highlighted in an actual run.
  7
  >>>>>>>
 ```
-with the word "Plexus" on line 2 highlighted.
+with the word "Plexus" on line 2 highlighted, line numbers are printed and coloring is used. 
 
 ### find all files where both file name (-n) and content (-g) matches pattern and dump them on stdout:
 ```
@@ -95,7 +95,7 @@ with the word "Plexus" on line 2 highlighted.
  5 artifactId=clojure
  >>>>>>>
 ```
-with the word "groupId" on line 4 highlighted.
+with the word "groupId" on line 4 is highlighted, line numbers are printed and coloring is used. 
 
 ### find all files where name (-n) matches pattern and calculate sha1 and md5 hash (-s) for them:
 ```

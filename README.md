@@ -156,6 +156,8 @@ To retrieve examples of how to use `findjar`:
 findjar --examples
 ```
 
+or to see a browser compatible list, please refer to the [examples page](https://github.com/mbjarland/findjar#examples).
+
 ## License
 
 The project is released under the [Eclipse Public License - v2.0](https://www.eclipse.org/legal/epl-2.0/)
