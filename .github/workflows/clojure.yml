@@ -12,7 +12,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
       - name: cache clj deps
@@ -20,13 +19,13 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.m2
-          key: ${{ runner.os }}-build-clj-deps-${{ hashFiles('deps.edn') }}
+          key: ${{ runner.os }}-build-clj-deps-${{ hashFiles('deps.edn', 'build.clj', '.github/workflows/clojure.yml') }}
       - name: install clojure
         run: |
           curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
           chmod +x linux-install.sh
           sudo ./linux-install.sh --prefix ${CLJ_PATH}
-          echo "$HOME/clojure/bin" >> $GITHUB_PATH
+          echo "${CLJ_PATH}/bin" >> $GITHUB_PATH
       - name: execute tests
         run: clojure -M:test
       - name: build uberjar
