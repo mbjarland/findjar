@@ -284,9 +284,9 @@
                     stream-factory #(jio/input-stream file)
                     file-content   (wrap-file-content stream-factory output opts)]
                 (print-stream-matches output opts file-name path file-content)))
-   :desc    "files on disk"
+   :desc    "normal files"
    :default true
-   :char    \d})
+   :char    \n})
 
 
 (defn munge-regexes [opts]

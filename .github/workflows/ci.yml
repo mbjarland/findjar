@@ -38,9 +38,9 @@ jobs:
           key: cljdeps-${{ hashFiles('deps.edn', 'build.clj') }}
           restore-keys: cljdeps-
       - name: Execute tests
-        run: clj -M:test
+        run: clojure -M:test
       - name: Build uberjar
-        run: clj -T:build uber
+        run: clojure -T:build uber
 #      - name: archive uberjar
 #        uses: actions/upload-artifact@v3
 #        with:

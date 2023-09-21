@@ -43,7 +43,7 @@
 
 (defn file-types
   "produces a map on the following form:
-  {\\d {:desc \"files on disk\", :default true, :ext :default},
+  {\\n {:desc \"normal files\", :default true, :ext :default},
    \\j {:desc \"files in jar files\", :default true, :ext \"jar\"},
    \\z {:desc \"files in zip files\", :default false, :ext \"zip\"}}
    pulls the data from the multimethod defined for file types"
@@ -160,7 +160,7 @@
       (str "--types <" (file-type-selectors) ">")
       (str "restrict the files searched to only the type(s) specified. "
            "The list of supported file types is extensible. Available file types: "
-           (file-type-descriptions))
+           (file-type-descriptions) ". Default: " (str/join  (map first (default-file-types))))
       :default (default-file-type-exts)
       :parse-fn parse-types
       :validate [#(every? (comp not nil?) %) (str "type must be one of " (file-type-selectors))]]
@@ -223,6 +223,10 @@
     finding that specific file or class in your maven repo, classpath, etc
     when that file can reside either directly on disk or inside a jar archive."
    ""
+   "Also this tool can be useful in detecting what version a specific class file"
+   "or source file inside a library jar changed between a number of versions of"
+   "the library file."
+   ""
    "Note that this tool is capable of a few extra tricks such as writing
     out the contents of matched files inside jar files and calculating
     md5 or sha1 hashes of matched files inside jar files."
@@ -247,10 +251,12 @@
    "Command line switches can be provided either using short form i.e. '-t j'
     or long form i.e. '--type j'."
    ""
-   "For usage examples, run: ~> findjar --examples"
+   "For usage examples:"
+   ""
+   "   ~> findjar --examples"
    ""
    "Author: Matias Bjarland / mbjarland@gmail.com"
-   "        Copyright (c) 2022 - Iteego AB"
+   ""
    ""
    (str "findjar " (version-string))
    ""
@@ -391,13 +397,17 @@
    "     ...95aaa8c6e9af74 clojure-1.9.0.jar@clojure/set.clj"
    ""])
 
-(defn examples [opts]
+(defn examples
+  "return a display string with the example usages"
+  [opts]
   (->> examples-text
        ;(map #(wrap-line MAX_WIDTH %) lines)
        (map #(colorize opts %))
        (str/join \newline)))
 
-(defn error-msg [errors summary]
+(defn error-msg
+  "return a display string for an error message"
+  [errors summary]
   (str (usage summary)
        "\n"
        "ERROR" (when (> (count errors) 1) "S") ":\n\n"
