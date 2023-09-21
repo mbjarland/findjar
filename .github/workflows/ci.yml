@@ -24,7 +24,7 @@ jobs:
         with:
           distribution: zulu
           java-version: ${{ matrix.jdk }}
-          cache: maven
+#          cache: maven
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@master
         with:
