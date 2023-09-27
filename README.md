@@ -16,11 +16,11 @@ Note that this tool is capable of a few extra tricks such as colorizing matches,
 
 ## Features
 
-- 📂 Searches both normal files (like \*nix find) and files inside .jar and .zip archives.
-- 🔍 Supports regex matching for file names, paths, and content within the files.
-- 📜 Support printing contents of matched files, both normal files and files within jar/zip archives.
-- 🔐 Calculates md5, sha1, sha512, crc32, and sha256 hashes for matched files.
-- 🌈 ANSI coloring for better visualization, with an option to toggle off.
+- searches both normal files (like \*nix find) and files inside .jar and .zip archives.
+- supports regex matching for file names, paths, and content within the files.
+- support printing contents of matched files, both normal files and files within jar/zip archives.
+- calculates md5, sha1, sha512, crc32, and sha256 hashes for matched files.
+- ANSI coloring for better visualization, with an option to toggle off.
 
 ## Installation / Building
 
