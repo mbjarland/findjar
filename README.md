@@ -24,7 +24,8 @@ Note that this tool is capable of a few extra tricks such as colorizing matches,
 - calculates md5, sha1, sha512, crc32, and sha256 hashes for matched files.
 - intra line coloring of matches
 - support for dumping the matched data to a file for post processing
-- ANSI coloring for better visualization, with an option to toggle off.
+- ANSI coloring for better visualization, with an option to toggle off
+- built to be open - all side effecting things are in a special namespace and extensibility is supported with protocols
 
 ## Installation / Building
 
@@ -33,7 +34,9 @@ This project uses:
   * java - tested against java 11, 17, and 21. 
   * clojure - clojure installation instructions can be found [here](https://clojure.org/guides/install_clojure)
   
-assuming the above requirements of java and clojure are met, you can build the project using: 
+Under the covers the project uses [clojure tools deps](https://clojure.org/guides/deps_and_cli) and [clojure tools build](https://clojure.org/guides/tools_build) to create an uber jar - but if you just want to build the tool, you don't need to worry about this, just run the build command as per below. 
+
+Assuming the above requirements of java and clojure are met, you can build the project using: 
 
 ```bash
  ─➤ clj -T:build uber
