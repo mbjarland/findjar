@@ -22,6 +22,8 @@ Note that this tool is capable of a few extra tricks such as colorizing matches,
 - supports regex matching for file names, paths, and content within the files.
 - support printing contents of matched files, both normal files and files within jar/zip archives.
 - calculates md5, sha1, sha512, crc32, and sha256 hashes for matched files.
+- intra line coloring of matches
+- support for dumping the matched data to a file for post processing
 - ANSI coloring for better visualization, with an option to toggle off.
 
 ## Installation / Building
