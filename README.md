@@ -27,6 +27,16 @@ Note that this tool is capable of a few extra tricks such as colorizing matches,
 - ANSI coloring for better visualization, with an option to toggle off
 - built to be open - all side effecting things are in a special namespace and extensibility is supported with protocols
 
+### Examples
+
+To list some examples of how to use `findjar`:
+
+```bash
+findjar --examples
+```
+
+or to see a browser compatible list, please refer to the [examples page](https://github.com/mbjarland/findjar/blob/master/examples.md) (without coloring at the moment - this might change in the near future).
+
 ## Installation / Building
 
 This project uses:
@@ -62,7 +72,7 @@ If you are on osx or \*nix and you want to make life easier you can create an al
 After this you can run the tool as you would a normal command: 
 
 ```
- ─➤ findjar ~/.m2 --help
+ ─➤ findjar ~/.m2
 ```
 
 
@@ -159,16 +169,6 @@ Options:
   -h, --help             show usage information
 
 ```
-
-### Examples
-
-To retrieve examples of how to use `findjar`:
-
-```bash
-findjar --examples
-```
-
-or to see a browser compatible list, please refer to the [examples page](https://github.com/mbjarland/findjar/blob/master/examples.md).
 
 ## License
 
