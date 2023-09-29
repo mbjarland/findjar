@@ -6,7 +6,7 @@
 
 findjar - a tool for searching through files, including files inside jars 
 
-![alt text](https://github.com/mbjarland/findjar/doc/findjar_manifest_jdk_created_by.png)
+![alt text](https://raw.githubusercontent.com/mbjarland/findjar/master/doc/findjar_manifest_jdk_created_by.png)
 
 findjar searches for files/content in any disk structure. It is capable of looking both for/in normal files and also for/in files inside zip/jar files. It is capable of regex matching both for file name/path and for content within the files. 
  
