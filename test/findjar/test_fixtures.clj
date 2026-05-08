@@ -13,6 +13,8 @@
          data.zip           -> contains:
                               data/numbers.txt    (1..5 lines)
          empty.jar          (zero-byte file with .jar extension)
+         target/junk.txt    (default-excluded dir contents)
+         .git/HEAD          (default-excluded dir contents)
 
   All paths use forward slashes inside archives."
   (:require [clojure.java.io :as jio])
@@ -69,6 +71,8 @@
                 [["data/numbers.txt" numbers-txt]])
     (jio/make-parents (jio/file root "empty.jar"))
     (.createNewFile (jio/file root "empty.jar"))
+    (write-text! (jio/file root "target" "junk.txt") "build artifact\n")
+    (write-text! (jio/file root ".git" "HEAD") "ref: refs/heads/main\n")
     root))
 
 (defn delete-recursively! [^File f]

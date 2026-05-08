@@ -206,6 +206,35 @@
 ;; ----------------------------------------------------------------------------
 ;; Robustness: empty.jar must not crash the scan
 
+;; ----------------------------------------------------------------------------
+;; -l / --files-only with -g
+
+(deftest files-only-collapses-grep-to-paths
+  (let [out  (run {:grep #"Rich Hickey" :files-only true})
+        ;; with --files-only, hits become :match calls (no :grep calls)
+        match-paths (set (ro/paths-of out :match))
+        grep-calls  (filter #(= :grep (first %)) (ro/calls-of out))]
+    (testing "no per-line :grep emissions"
+      (is (empty? grep-calls)))
+    (testing "one :match per file containing the pattern"
+      (is (contains? match-paths "beta.clj"))
+      (is (contains? match-paths "lib.jar@clojure/string.clj")))))
+
+;; ----------------------------------------------------------------------------
+;; --all and default directory exclusions
+
+(deftest excluded-dirs-are-skipped-by-default
+  (let [paths (set (ro/paths-of (run {}) :match))]
+    (testing "fixture's target/ and .git/ are not traversed"
+      (is (not (some #(.contains ^String % "target/") paths)))
+      (is (not (some #(.contains ^String % ".git/") paths))))))
+
+(deftest all-flag-disables-exclusions
+  (let [paths (set (ro/paths-of (run {:all true}) :match))]
+    (testing "with --all, target/ and .git/ contents are reachable"
+      (is (contains? paths "target/junk.txt"))
+      (is (contains? paths ".git/HEAD")))))
+
 (deftest empty-jar-does-not-crash
   (let [out (run {:types #{"jar"}})]
     (testing "no warnings emitted for the zero-byte jar"

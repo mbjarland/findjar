@@ -5,22 +5,30 @@
 
 (defn- parsed
   "Parse args and return either {:exit-message ... :ok? ...} or
-  {:search-root ... :opts ...}."
+  {:search-roots ... :opts ...}."
   [& args]
   (cli/validate-args args))
 
-(deftest no-args-fails
-  (let [r (parsed)]
-    (is (str/includes? (:exit-message r) "no search root"))
-    (is (not (:ok? r)))))
+(deftest no-args-defaults-to-cwd
+  (let [{:keys [search-roots opts exit-message]} (parsed)]
+    (is (nil? exit-message))
+    (is (= 1 (count search-roots)))
+    (is (= "." (.getPath ^java.io.File (first search-roots))))
+    (is (some? opts))))
 
-(deftest multiple-search-roots-fails
-  (let [r (parsed "/tmp" "/tmp/other")]
-    (is (str/includes? (:exit-message r) "multiple search-roots"))))
+(deftest multiple-search-roots-accepted
+  (let [{:keys [search-roots]} (parsed "/tmp" "/var")]
+    (is (= 2 (count search-roots)))
+    (is (= ["/tmp" "/var"] (mapv #(.getPath ^java.io.File %) search-roots)))))
 
 (deftest non-directory-fails
   (let [r (parsed "/this/path/does/not/exist/probably")]
-    (is (str/includes? (:exit-message r) "invalid non-directory"))))
+    (is (str/includes? (:exit-message r) "non-directory search root"))))
+
+(deftest some-bad-roots-fails-with-list
+  (let [r (parsed "/tmp" "/this/does/not/exist" "/var")]
+    (is (str/includes? (:exit-message r) "non-directory"))
+    (is (str/includes? (:exit-message r) "this/does/not/exist"))))
 
 (deftest path-and-apath-mutually-exclusive
   (let [r (parsed "/tmp" "-p" "x" "-a" "y")]
@@ -82,6 +90,20 @@
     (is (= "a and b"       (cli/english-list ["a" "b"])))
     (is (= "a, b, and c"   (cli/english-list ["a" "b" "c"])))
     (is (= "a, b, c, and d" (cli/english-list ["a" "b" "c" "d"])))))
+
+(deftest files-only-flag
+  (let [{:keys [opts]} (parsed "/tmp" "-l")]
+    (is (true? (:files-only opts))))
+  (let [{:keys [opts]} (parsed "/tmp" "--files-only")]
+    (is (true? (:files-only opts))))
+  (let [{:keys [opts]} (parsed "/tmp")]
+    (is (not (:files-only opts)))))
+
+(deftest all-flag
+  (let [{:keys [opts]} (parsed "/tmp" "--all")]
+    (is (true? (:all opts))))
+  (let [{:keys [opts]} (parsed "/tmp")]
+    (is (not (:all opts)))))
 
 (deftest version-string-test
   (let [v (cli/version-string)]
