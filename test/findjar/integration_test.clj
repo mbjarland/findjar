@@ -1,13 +1,17 @@
 (ns findjar.integration-test
   "End-to-end tests: drive perform-scan and parallel-scan against a fresh
   fixture tree, asserting on the calls a recording FindJarOutput captures."
-  (:require [clojure.string :as str]
+  (:require [clojure.java.io :as jio]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [findjar.core :as c]
+            [findjar.main :as main]
             [findjar.output.buffering :as buf]
             [findjar.recording-output :as ro]
             [findjar.test-fixtures :as fix])
-  (:import [java.io File]))
+  (:import [java.io File]
+           [java.nio.file Files]
+           [java.nio.file.attribute FileAttribute]))
 
 ;; ----------------------------------------------------------------------------
 ;; Fixture lifecycle
@@ -23,7 +27,7 @@
 (defn- raw-cat
   "Minimal cat renderer for tests — just returns the file's contents as a
   string. No ANSI, no line numbers."
-  [_path stream-factory _opts]
+  [_output _path stream-factory _opts]
   (with-open [s (stream-factory)]
     (slurp s)))
 
@@ -179,6 +183,27 @@
     (is (str/includes? (nth (first rows) 2) "Manifest-Version: 1.0"))))
 
 ;; ----------------------------------------------------------------------------
+;; -o (out-file) — exercises main/render-cat + default-output's file-write path
+
+(deftest cat-with-out-file-writes-and-strips-ansi
+  (let [tmp (.toFile (Files/createTempFile "findjar-cat-" ".txt"
+                                            (into-array FileAttribute [])))]
+    (try
+      (let [output (main/default-output)
+            opts   {:name #"^alpha\.txt$" :cat true :out-file tmp
+                    :monochrome true :types #{:default "jar"}}]
+        (c/perform-scan *root* output main/render-cat opts)
+        (let [contents (slurp tmp)]
+          (testing "file-mode output suppresses line-number prefixes"
+            (is (str/includes? contents "hello"))
+            (is (str/includes? contents "world"))
+            (is (str/includes? contents "clojure rocks")))
+          (testing "no ANSI escape sequences when written to a file"
+            (is (not (re-find #"\[" contents))))))
+      (finally
+        (.delete tmp)))))
+
+;; ----------------------------------------------------------------------------
 ;; Robustness: empty.jar must not crash the scan
 
 (deftest empty-jar-does-not-crash
@@ -190,14 +215,13 @@
                 (ro/paths-of out :match))))))
 
 ;; ----------------------------------------------------------------------------
-;; Parallel scan must produce identical (modulo order) results
+;; Parallel scan must produce identical, ordered results — not just same set.
 
-(deftest parallel-matches-serial
-  (let [opts {:types #{:default "jar" "zip"}}
-        s (run opts)
-        p (run-parallel opts)]
-    (is (= (set (ro/paths-of s :match))
-           (set (ro/paths-of p :match))))))
+(deftest parallel-preserves-input-order
+  (let [opts {:types #{:default "jar" "zip"}}]
+    (testing "match calls appear in the same input order serial vs parallel"
+      (is (= (ro/paths-of (run opts) :match)
+             (ro/paths-of (run-parallel opts) :match))))))
 
 (deftest parallel-grep-matches-serial
   (let [opts {:grep #"Rich Hickey"}
@@ -206,7 +230,38 @@
                       (filter #(= :grep (first %)))
                       (map #(nth % 2))
                       (filter :hit?)
-                      (map (juxt :path :line-#))
-                      set))]
+                      (map (juxt :path :line-#))))]
     (is (= (gather (run opts))
            (gather (run-parallel opts))))))
+
+(deftest parallel-jobs-honoured
+  (testing "explicit --parallel-jobs limits parallelism but produces same output"
+    (let [opts {:parallel-jobs 2 :grep #"Rich Hickey"}
+          parallel-paths (->> (ro/calls-of (run-parallel opts))
+                              (filter #(= :grep (first %)))
+                              (map #(nth % 2))
+                              (filter :hit?)
+                              (map :path))
+          serial-paths   (->> (ro/calls-of (run {:grep #"Rich Hickey"}))
+                              (filter #(= :grep (first %)))
+                              (map #(nth % 2))
+                              (filter :hit?)
+                              (map :path))]
+      (is (= serial-paths parallel-paths)))))
+
+;; ----------------------------------------------------------------------------
+;; Worker exception is contained as a warn, doesn't kill the scan.
+
+(deftest parallel-worker-exception-becomes-warn
+  (let [out  (ro/recording-output)
+        ;; render-cat that throws unconditionally; with :cat true we'll hit
+        ;; it for the matching file and the scan should not abort.
+        bad-render (fn [_ _ _ _] (throw (RuntimeException. "boom")))
+        opts {:cat true :name #"^MANIFEST\.MF$"
+              :types #{:default "jar"}}]
+    (buf/parallel-scan *root* out bad-render opts)
+    (testing "worker exception is captured as a warn"
+      (is (some #(= :warn (first %)) (ro/calls-of out))))
+    (testing "the warn message mentions the failing file"
+      (let [warns (filter #(= :warn (first %)) (ro/calls-of out))]
+        (is (some #(re-find #"lib\.jar" (nth % 1)) warns))))))

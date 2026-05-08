@@ -63,3 +63,33 @@
   (testing "parse-hash-selector round-trips"
     (is (= :sha1 (cli/parse-hash-selector "sha1")))
     (is (nil? (cli/parse-hash-selector "nope")))))
+
+(deftest parallel-jobs-flag
+  (testing "valid parallel-jobs is plumbed through"
+    (let [{:keys [opts]} (parsed "/tmp" "--parallel-jobs" "3")]
+      (is (= 3 (:parallel-jobs opts)))))
+  (testing "non-positive parallel-jobs is rejected"
+    (is (str/includes? (:exit-message (parsed "/tmp" "--parallel-jobs" "0"))
+                       "must be a positive integer")))
+  (testing "non-numeric parallel-jobs is rejected"
+    (is (str/includes? (:exit-message (parsed "/tmp" "--parallel-jobs" "lots"))
+                       "Error"))))
+
+(deftest english-list-test
+  (testing "0/1/2/3+ items"
+    (is (= ""              (cli/english-list [])))
+    (is (= "a"             (cli/english-list ["a"])))
+    (is (= "a and b"       (cli/english-list ["a" "b"])))
+    (is (= "a, b, and c"   (cli/english-list ["a" "b" "c"])))
+    (is (= "a, b, c, and d" (cli/english-list ["a" "b" "c" "d"])))))
+
+(deftest version-string-test
+  (let [v (cli/version-string)]
+    (testing "non-empty"
+      (is (string? v))
+      (is (pos? (count v))))
+    (testing "either dev or version with hash + date"
+      ;; In a built jar this would be e.g. "1.0.111 - abc1234 - 2024.05.08 ..."
+      ;; In repl/test invocation it's typically "dev" or the on-disk edn.
+      (is (or (= v "dev")
+              (re-find #"^\d+\.\d+\.\d+" v))))))
