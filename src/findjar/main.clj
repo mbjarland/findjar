@@ -49,49 +49,47 @@
            (apply str)))))
 
 ;;;; ---------------------------------------------------------------------------
-;;;; Cat rendering — read once, format once. Returns the formatted string
-;;;; (with optional ANSI) ready for emission.
+;;;; Cat rendering — stream lines, format on the fly. Returns the formatted
+;;;; string (with optional ANSI) ready for emission.
+
+;; Fixed-width line-number column. Files with more than 999999 lines simply
+;; lose alignment past the cap — they still render correctly. Avoiding a
+;; precount keeps cat usable on large files.
+(def ^:private cat-pad-width 6)
 
 (defn render-cat
-  "Materialize the contents of stream-factory as a printable cat block. When
+  "Materialize stream-factory's content as a printable cat block. When
   out-file is set in opts we suppress ANSI and line-number prefixes so the
-  written file is plain. Returns nil if the stream couldn't be opened."
-  [path stream-factory opts]
-  (let [to-file? (some? (:out-file opts))]
-    (c/with-reader nil opts stream-factory
+  written file is plain. Returns nil if the stream couldn't be opened —
+  the failure is reported via output's warn."
+  [output path stream-factory opts]
+  (let [to-file? (some? (:out-file opts))
+        grep     (:grep opts)
+        fmt      (str "%" cat-pad-width "d ")]
+    (c/with-reader output opts stream-factory
       (fn [reader]
-        (let [lines     (vec (line-seq reader))
-              max-n-len (count (str (count lines)))
-              grep      (:grep opts)]
-          (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
-            (with-out-str
-              (println (style red "<<<<<<<") path)
-              (doseq [[n line] (map-indexed vector lines)]
-                (let [idxs   (when grep (c/match-idxs grep line))
-                      line   (if (seq idxs)
-                               (highlight-matches true line idxs red)
-                               line)
-                      prefix (if to-file?
-                               ""
-                               (let [n-len (count (str (inc n)))
-                                     pad   (str/join (repeat (- max-n-len n-len) \space))]
-                                 (str pad (inc n) " ")))]
-                  (println (str (style green prefix) line))))
-              (println (style red ">>>>>>>")))))))))
+        (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
+          (with-out-str
+            (println (style red "<<<<<<<") path)
+            (doseq [[n line] (map-indexed vector (line-seq reader))]
+              (let [idxs   (when grep (c/match-idxs grep line))
+                    line   (if (seq idxs)
+                             (highlight-matches true line idxs red)
+                             line)
+                    prefix (if to-file? "" (format fmt (inc n)))]
+                (println (str (style green prefix) line))))
+            (println (style red ">>>>>>>"))))))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Default FindJarOutput — emits to *out* (and -o file when configured)
 
 (defn- format-grep-line [max-line-# {:keys [path line-# hit? line match-idxs]} opts]
-  (let [context?  (pos? (or (:context opts) 0))
-        display-# (inc line-#)
-        max       (count (str max-line-#))
-        len       (count (str display-#))
-        pad       (str/join (repeat (inc (- max len)) \space))]
-    (str (str/trim path)
+  (let [context? (pos? (or (:context opts) 0))
+        width    (count (str max-line-#))
+        num-col  (format (str "%" width "d ") (inc line-#))]
+    (str path
          (if (and (not hit?) context?) " " ":")
-         display-#
-         pad
+         num-col
          (highlight-matches hit? line match-idxs red))))
 
 (defn default-output
@@ -153,6 +151,11 @@
   (try
     (main-entrypoint true args)
     (finally
+      ;; Flush *out* explicitly: under (:gen-class), Clojure's *out* is an
+      ;; unbuffered OutputStreamWriter, but its CharsetEncoder buffer holds
+      ;; up to 8KB that JVM exit will not drain on its own. Without this,
+      ;; large -c (cat) blocks silently disappear.
+      (.flush *out*)
       ;; pmap / futures use the agent pool, whose non-daemon idle threads
       ;; would otherwise pin the JVM open for 60s after the scan completes.
       (shutdown-agents))))

@@ -79,7 +79,7 @@
   "Apply the user-supplied regex flags (string of single-char flags) to all
   pattern opts in opts."
   [opts]
-  (if-let [flags (some-> opts :flags seq)]
+  (if-let [flags (not-empty (:flags opts))]
     (reduce (fn [acc k]
               (if-let [^Pattern v (get acc k)]
                 (assoc acc k (compile-with-flags v flags))
@@ -104,19 +104,16 @@
   "Multiple context windows may emit the same :line-#. Fold duplicates,
   preferring the one with :hit? true."
   [matches]
-  (reduce-kv
-    (fn [a _ group]
-      (conj a (or (first (filter :hit? group))
-                  (first group))))
-    []
-    (group-by :line-# matches)))
+  (mapv (fn [group]
+          (or (first (filter :hit? group)) (first group)))
+        (vals (group-by :line-# matches))))
 
 (defn- find-line-maps-with-context [sliding context pattern path]
   (reduce
     (fn [a [window-# lines]]
       (let [idxs (match-idxs pattern (nth lines context))]
         (if (seq idxs)
-          (concat a (window->matching-lines path window-# context lines idxs))
+          (into a (window->matching-lines path window-# context lines idxs))
           a)))
     []
     (map-indexed vector sliding)))
@@ -174,24 +171,30 @@
 
 (defn- handle-match
   "Common dispatcher: given a match candidate (file or jar entry), apply name/
-  path/apath filters and then run the requested operation."
+  path/apath filters and then run the requested operation. Locals are renamed
+  away from clojure.core fns (name, hash) so the body stays readable."
   [output opts file-name file-path stream-factory render-cat]
-  (let [{:keys [name grep path apath cat hash]} opts
-        macro-op (or cat hash)]
+  (let [name-pat   (:name opts)
+        grep-pat   (:grep opts)
+        path-pat   (:path opts)
+        apath-pat  (:apath opts)
+        cat?       (:cat opts)
+        hash-types (:hash opts)
+        macro-op   (or cat? hash-types)]
     (cond
-      (and name  (not (re-find name  file-name))) nil
-      (and path  (not (re-find path  file-path))) nil
-      (and apath (not (re-find apath file-path))) nil
-      (not (or macro-op grep))
+      (and name-pat  (not (re-find name-pat  file-name))) nil
+      (and path-pat  (not (re-find path-pat  file-path))) nil
+      (and apath-pat (not (re-find apath-pat file-path))) nil
+      (not (or macro-op grep-pat))
       (p/match output file-path opts)
 
-      (and grep macro-op
-           (not (stream-line-matches? output opts stream-factory grep))) nil
+      (and grep-pat macro-op
+           (not (stream-line-matches? output opts stream-factory grep-pat))) nil
 
-      hash (calculate-hashes output file-path stream-factory hash opts)
-      cat  (when-let [s (render-cat file-path stream-factory opts)]
-             (p/dump-stream output file-path s opts))
-      grep (grep-stream output file-path stream-factory opts))))
+      hash-types (calculate-hashes output file-path stream-factory hash-types opts)
+      cat?       (when-let [s (render-cat output file-path stream-factory opts)]
+                   (p/dump-stream output file-path s opts))
+      grep-pat   (grep-stream output file-path stream-factory opts))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; File-type registry — replaces defmulti file-finder
@@ -222,15 +225,14 @@
              :char    \z}})
 
 (defn- finder-for
-  "Pick a file-finder entry for f, given the active set of file types."
+  "Pick a file-finder entry for f given the active set of types. Assumes f
+  has already passed valid-file-fn — by construction either the ext is in
+  types and registered, or :default is in types and we fall through."
   [^File f types]
-  (let [ext (file-ext f)]
-    (cond
-      (and ext (contains? file-finders ext) (contains? types ext))
-      (get file-finders ext)
-
-      :else
-      (get file-finders :default))))
+  (or (when-let [ext (file-ext f)]
+        (when (contains? types ext)
+          (file-finders ext)))
+      (file-finders :default)))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Scanners

@@ -178,6 +178,12 @@
       "scan files serially (default is to scan in parallel using all available cores)"
       :id :no-parallel]
 
+     [nil "--parallel-jobs <n>"
+      "cap the number of concurrent scan workers. Default is cores+2 (whatever pmap picks). Useful on HDD or networked filesystems."
+      :id :parallel-jobs
+      :parse-fn #(Integer/parseInt %)
+      :validate [pos? "must be a positive integer"]]
+
      [nil "--profile"
       "internal developer option - enable profiling"]
 
