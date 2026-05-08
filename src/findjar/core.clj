@@ -3,317 +3,317 @@
             [clojure.string :as str]
             [findjar.hash :as hash]
             [findjar.protocols :as p])
-  (:import [java.io File]
-           [java.util.zip ZipEntry ZipFile])
-  (:gen-class))
+  (:import [java.io File InputStream]
+           [java.util.regex Pattern]
+           [java.util.zip ZipEntry ZipFile]))
 
-(defmulti calculate-hash (fn [id] id))
+;;;; ---------------------------------------------------------------------------
+;;;; Stream helpers — replace the old FileContent protocol.
+;;;; A "stream-factory" is a 0-arg fn that returns a fresh InputStream each
+;;;; time it's called. Helpers manage with-open and warn-on-error so callers
+;;;; don't repeat the boilerplate.
 
-(defmethod calculate-hash :md5 [_]
-  {:fn   (fn [file-content] (p/as-stream file-content #(hash/digest "MD5" %)))
-   :desc "md5"})
+(defn with-stream
+  "Open the stream produced by stream-factory, hand it to f, close it.
+  On exception, call (warn output msg ex opts) and return nil."
+  [output opts stream-factory f]
+  (try
+    (with-open [^InputStream s (stream-factory)]
+      (f s))
+    (catch Exception e
+      (p/warn output (.getMessage e) e opts)
+      nil)))
 
-(defmethod calculate-hash :sha1 [_]
-  {:fn   (fn [file-content] (p/as-stream file-content #(hash/digest "SHA-1" %)))
-   :desc "sha1"})
+(defn with-reader
+  "Open stream-factory as a reader, hand it to f, close it. Same error
+  semantics as with-stream."
+  [output opts stream-factory f]
+  (with-stream output opts stream-factory
+    (fn [s] (with-open [r (jio/reader s)] (f r)))))
 
-(defmethod calculate-hash :sha256 [_]
-  {:fn   (fn [file-content] (p/as-stream file-content #(hash/digest "SHA-256" %)))
-   :desc "sha256"})
+;;;; ---------------------------------------------------------------------------
+;;;; Hash algorithm registry — plain map keyed by algorithm keyword.
+;;;; Each entry: {:digest (fn [InputStream] -> hex-string)
+;;;;              :desc   "string shown in CLI"}
 
-(defmethod calculate-hash :sha512 [_]
-  {:fn   (fn [file-content] (p/as-stream file-content #(hash/digest "SHA-512" %)))
-   :desc "sha512"})
+(def hash-algorithms
+  {:md5    {:digest #(hash/digest "MD5"     %) :desc "md5"}
+   :sha1   {:digest #(hash/digest "SHA-1"   %) :desc "sha1"}
+   :sha256 {:digest #(hash/digest "SHA-256" %) :desc "sha256"}
+   :sha512 {:digest #(hash/digest "SHA-512" %) :desc "sha512"}
+   :crc32  {:digest hash/crc-32               :desc "crc32"}})
 
-(defmethod calculate-hash :crc32 [_]
-  {:fn   (fn [file-content] (p/as-stream file-content #(hash/crc-32 %)))
-   :desc "crc32"})
+(defn hash-by-desc
+  "Return the algorithm keyword whose :desc matches s (the user-facing
+  string from the CLI), or nil."
+  [s]
+  (some (fn [[k {:keys [desc]}]] (when (= desc s) k)) hash-algorithms))
+
+;;;; ---------------------------------------------------------------------------
+;;;; Regex helpers
 
 (defn match-idxs
-  ""
-  [pattern str]
-  (let [matcher (re-matcher pattern str)]
-    (loop [r nil]
-      (if (re-find matcher)
-        (recur (conj (if (nil? r) [] r)
-                     {:start (.start matcher)
-                      :end   (.end matcher)}))
-        r))))
+  "Return a vector of {:start i :end j} for every match of pattern in s.
+  Empty when there are no matches."
+  [^Pattern pattern ^String s]
+  (let [m (re-matcher pattern s)]
+    (loop [acc (transient [])]
+      (if (.find m)
+        (recur (conj! acc {:start (.start m) :end (.end m)}))
+        (persistent! acc)))))
 
-(defn window->matching-lines
-  ""
-  [path match-line-# context lines match-idxs]
+(def ^:private flag-bits
+  ;; java.util.regex.Pattern compile-time flag bits
+  {\i Pattern/CASE_INSENSITIVE
+   \m Pattern/MULTILINE
+   \s Pattern/DOTALL
+   \u Pattern/UNICODE_CASE
+   \x Pattern/COMMENTS
+   \d Pattern/UNIX_LINES})
+
+(defn- compile-with-flags ^Pattern [^Pattern pattern flags]
+  (let [bits (reduce (fn [acc c] (bit-or acc (get flag-bits c 0))) 0 flags)]
+    (Pattern/compile (.pattern pattern) bits)))
+
+(defn munge-regexes
+  "Apply the user-supplied regex flags (string of single-char flags) to all
+  pattern opts in opts."
+  [opts]
+  (if-let [flags (some-> opts :flags seq)]
+    (reduce (fn [acc k]
+              (if-let [^Pattern v (get acc k)]
+                (assoc acc k (compile-with-flags v flags))
+                acc))
+            opts
+            [:name :grep :path :apath])
+    opts))
+
+;;;; ---------------------------------------------------------------------------
+;;;; Grep — sliding-window context
+
+(defn- window->matching-lines [path match-line-# context lines match-idxs]
   (keep
     (fn [[cn line]]
       (when line
         (let [hit? (= cn match-line-#)
-              m    {:path   path
-                    :line-# cn
-                    :hit?   hit?
-                    :line   line}]
-          (if hit? (assoc m :match-idxs match-idxs) m))))
+              m    {:path path :line-# cn :hit? hit? :line line}]
+          (cond-> m hit? (assoc :match-idxs match-idxs)))))
     (map-indexed #(vector (+ (- match-line-# context) %1) %2) lines)))
 
-(defn dedupe-line-maps
-  "removes lines which are duplicated by the context lines
-  window functionality. Multiple lines with the same line number
-  should be folded into one and when possible, matching lines
-  should win in this filter. Incoming matches are represented as
-  {:path s :line-nr c :hit? h :start-col s :end-col d}"
+(defn- dedupe-line-maps
+  "Multiple context windows may emit the same :line-#. Fold duplicates,
+  preferring the one with :hit? true."
   [matches]
   (reduce-kv
     (fn [a _ group]
-      (if-let [ml (first (filter :hit? group))]
-        (conj a ml)
-        (conj a (first group))))
+      (conj a (or (first (filter :hit? group))
+                  (first group))))
     []
     (group-by :line-# matches)))
 
-
-(defn find-line-maps-with-context
-  "takes a sliding window of lines, a number indicating the number of
-  context lines, a regex pattern to match for, a path to use for displaying
-  output and generates a collection of 'matching lines' represented as maps on the
-  following format (context 2) :
-
-    ({:path 'path', :line-# 0,  :hit? false, :line '1111'}
-     {:path 'path', :line-# 1,  :hit? true,  :line '2222', :match-idxs [{:start 0, :end 2} {:start 2, :end 4}]}
-     {:path 'path', :line-# 2,  :hit? false, :line '3333'}
-     {:path 'path', :line-# 3,  :hit? false, :line 'to be222or not222to be'}
-     {:path 'path', :line-# 1,  :hit? false, :line '2222'}
-     {:path 'path', :line-# 2,  :hit? false, :line '3333'}
-     {:path 'path', :line-# 3,  :hit? true,  :line 'to be222or not222to be', :match-idxs [{:start 5, :end 7} {:start 14, :end 16}]}
-     {:path 'path', :line-# 4,  :hit? false, :line '5555'}
-     {:path 'path', :line-# 5,  :hit? false, :line '6666'}
-     ...)
-
-  the argument sliding window is represented as a list of lists:
-
-   '('(nil nil '1111' '2222' '3333') '(nil '1111' '2222' '3333'...) ...)
-
-  where 1111 is the content on the first line etc."
-  [sliding context pattern path]
+(defn- find-line-maps-with-context [sliding context pattern path]
   (reduce
     (fn [a [window-# lines]]
-      (if-let [match-idxs (match-idxs pattern (nth lines context))]
-        (concat a (window->matching-lines path                   ; if there was a match
-                                          window-#
-                                          context
-                                          lines
-                                          match-idxs))
-        a))
+      (let [idxs (match-idxs pattern (nth lines context))]
+        (if (seq idxs)
+          (concat a (window->matching-lines path window-# context lines idxs))
+          a)))
     []
     (map-indexed vector sliding)))
 
-(comment
-  (grep-stream "path"
-               #(jio/input-stream "test.txt")
-               (findjar.main/default-output)
-               {:context 2
-                :grep    #"22"})
-
-  (grep-stream "path"
-               #(jio/input-stream "test.txt")
-               (findjar.main/default-output)
-               {:context 2
-                :grep    #"12345"})
-
-  )
-
 (defn grep-stream
-  "iterate through the file using a sliding window of
-  context lines before the 'current line' and context lines
-  after, output result on console on matches"
-  [output path file-content opts]
-  (p/as-reader
-    file-content
+  "Read file-content via stream-factory, slide a (1+2*context) window over
+  its lines, emit p/grep-match for every matching line + context."
+  [output path stream-factory opts]
+  (with-reader output opts stream-factory
     (fn [reader]
-      (let [s         (line-seq reader)
-            pattern   (:grep opts)
+      (let [pattern   (:grep opts)
             context   (or (:context opts) 0)
             window    (inc (* 2 context))
-            pad       (repeat context nil)                       ;TODO: fix padding with empty string
-            sliding   (partition window 1 (concat pad s pad))
+            pad       (repeat context nil)
+            sliding   (partition window 1 (concat pad (line-seq reader) pad))
             line-maps (find-line-maps-with-context sliding context pattern path)]
-        (when (not-empty line-maps)
+        (when (seq line-maps)
           (let [uniques    (dedupe-line-maps line-maps)
                 max-line-# (reduce max (map :line-# uniques))]
-            ;[path line-number match? line]
             (doseq [line-map (sort-by :line-# uniques)]
               (p/grep-match output max-line-# line-map opts))))))))
 
-(defn stream-line-matches?
-  ""
-  [file-content pattern]
-  (p/as-reader
-    file-content
-    (fn [reader]
-      (some (fn [line] (re-find pattern line)) (line-seq reader)))))
+(defn- stream-line-matches? [output opts stream-factory pattern]
+  (with-reader output opts stream-factory
+    (fn [reader] (some #(re-find pattern %) (line-seq reader)))))
 
-(defn calculate-hashes
-  "hash-types is a coll of keywords :md5 :sha1 etc"
-  [output path file-content hash-types opts]
+(defn- calculate-hashes [output path stream-factory hash-types opts]
   (doseq [hash-type hash-types]
-    (let [hash-fn    (:fn (calculate-hash hash-type))
-          hash-value (hash-fn file-content)]
-      (p/print-hash output path hash-type hash-value opts))))
+    (when-let [{:keys [digest]} (get hash-algorithms hash-type)]
+      (when-let [hash-value (with-stream output opts stream-factory digest)]
+        (p/print-hash output path hash-type hash-value opts)))))
 
-(defn print-stream-matches
-  "this method is central to the findjar functionality.
-   It takes the output handler implementing the output protocol
-   defined above, options, file name and path, and a stream factory
-   and executes searches based on the provided data"
-  [output opts file-name file-path file-content]
+;;;; ---------------------------------------------------------------------------
+;;;; Path / file helpers
+
+(defn name-part
+  "Return the final path segment of a forward-slash-delimited path."
+  [^String path]
+  (let [i (.lastIndexOf path (int \/))]
+    (if (neg? i) path (subs path (inc i)))))
+
+(defn file-ext
+  "Lowercase extension (without the dot) of a File, or nil if it has none."
+  [^File f]
+  (let [n (.getName f)
+        i (.lastIndexOf n (int \.))]
+    (when (and (pos? i) (not= (inc i) (count n)))
+      (str/lower-case (subs n (inc i))))))
+
+;;;; ---------------------------------------------------------------------------
+;;;; Cat materialization is delegated to a render fn passed in from main.
+;;;; The render fn signature is: (fn [path stream-factory opts] -> String)
+;;;; This lets buffering outputs materialize content while the source jar is
+;;;; still open, while keeping ANSI/formatting concerns out of core.
+
+(defn- handle-match
+  "Common dispatcher: given a match candidate (file or jar entry), apply name/
+  path/apath filters and then run the requested operation."
+  [output opts file-name file-path stream-factory render-cat]
   (let [{:keys [name grep path apath cat hash]} opts
         macro-op (or cat hash)]
     (cond
-      (and name (not (re-find name file-name))) nil              ; no name match -> exit
-      (and path (not (re-find path file-path))) nil              ; no path match -> exit
-      (and apath (not (re-find apath file-path))) nil            ; no apath match -> exit
-      (not (or macro-op grep)) (p/match output file-path opts)   ; normal non-grep match
-      (and grep macro-op (not (stream-line-matches? file-content grep))) nil ;grep+macro and no matches -> nil
-      hash (calculate-hashes output file-path file-content hash opts)
-      cat (p/dump-stream output file-path file-content opts)
-      grep (grep-stream output file-path file-content opts))))
+      (and name  (not (re-find name  file-name))) nil
+      (and path  (not (re-find path  file-path))) nil
+      (and apath (not (re-find apath file-path))) nil
+      (not (or macro-op grep))
+      (p/match output file-path opts)
 
-(defn wrap-file-content
-  ""
-  [stream-factory output opts]
-  (reify p/FileContent
-    (p/as-stream [_ stream-handler]
-      (try
-        (with-open [stream (stream-factory)]
-          (stream-handler stream))
-        (catch Exception e
-          (p/warn output (.getMessage e) e opts)
-          nil)))
-    (p/as-reader [this reader-handler]
-      (p/as-stream this (fn [stream]
-                          (with-open [reader (jio/reader stream)]
-                            (reader-handler reader)))))))
+      (and grep macro-op
+           (not (stream-line-matches? output opts stream-factory grep))) nil
 
-(def ^Integer slash (int \/))
+      hash (calculate-hashes output file-path stream-factory hash opts)
+      cat  (when-let [s (render-cat file-path stream-factory opts)]
+             (p/dump-stream output file-path s opts))
+      grep (grep-stream output file-path stream-factory opts))))
 
-(defn name-part
-  "given a/b/c.txt return c.txt"
-  [^String path]
-  (let [i (.lastIndexOf path slash)]
-    (if (= i -1) path (subs path i))))
+;;;; ---------------------------------------------------------------------------
+;;;; File-type registry — replaces defmulti file-finder
 
-; TODO: make -type accept a set to support "-t fjg" for files, jar files, gzip files etc
-(defn find-in-jar
-  [^File jar ^String path opts output]
+(declare scan-jar scan-disk-file)
+
+(def file-finders
+  "Registry of file-type handlers. Keys are file extensions (lowercased) or
+  :default for normal disk files. Each entry has:
+    :scan    (fn [^File f rel-path opts output render-cat] -> nil)
+    :desc    String shown in CLI help
+    :default Whether this type is searched when -t is not given
+    :char    Single-char selector used by -t"
+  {:default {:scan    (fn [f path opts output render-cat]
+                        (scan-disk-file f path opts output render-cat))
+             :desc    "normal files"
+             :default true
+             :char    \n}
+   "jar"    {:scan    (fn [f path opts output render-cat]
+                        (scan-jar f path opts output render-cat))
+             :desc    "files in jar files"
+             :default true
+             :char    \j}
+   "zip"    {:scan    (fn [f path opts output render-cat]
+                        (scan-jar f path opts output render-cat))
+             :desc    "files in zip files"
+             :default false
+             :char    \z}})
+
+(defn- finder-for
+  "Pick a file-finder entry for f, given the active set of file types."
+  [^File f types]
+  (let [ext (file-ext f)]
+    (cond
+      (and ext (contains? file-finders ext) (contains? types ext))
+      (get file-finders ext)
+
+      :else
+      (get file-finders :default))))
+
+;;;; ---------------------------------------------------------------------------
+;;;; Scanners
+
+(defn- scan-disk-file [^File f path opts output render-cat]
+  (let [stream-factory #(jio/input-stream f)]
+    (handle-match output opts (.getName f) path stream-factory render-cat)))
+
+(defn- scan-jar [^File jar ^String jar-path opts output render-cat]
   (when (pos? (.length jar))
-    (let [prefix (str (str/trim path) \@)]
+    (let [prefix (str (str/trim jar-path) \@)]
       (try
         (with-open [^ZipFile zip (ZipFile. ^File jar)]
           (doseq [^ZipEntry entry (enumeration-seq (.entries zip))]
             (let [entry-path     (.getName entry)
-                  entry-name     (name-part entry-path)          ;(.getName (jio/file entry-path)))
-                  jar-path       (.toString (.append (StringBuilder. prefix) entry-path)) ; (str prefix entry-path))
-                  stream-factory #(.getInputStream zip entry)
-                  file-content   (wrap-file-content stream-factory output opts)]
-              (print-stream-matches output opts entry-name jar-path file-content))))
+                  entry-name     (name-part entry-path)
+                  full-path      (str prefix entry-path)
+                  stream-factory #(.getInputStream zip entry)]
+              (handle-match output opts entry-name full-path stream-factory render-cat))))
         (catch Exception e
           (p/warn output
-                  (str (.getSimpleName (class e)) " opening " (.getPath jar) " - " (.getMessage e))
+                  (str (.getSimpleName (class e)) " opening " (.getPath jar)
+                       " - " (.getMessage e))
                   e
                   opts))))))
 
-(defn file-ext [^File f]
-  (let [n (.getName f)
-        i (.lastIndexOf n (int \.))]
-    (when (and (pos? i) (not (= (inc i) (count n))))
-      (subs n (inc i)))))
+;;;; ---------------------------------------------------------------------------
+;;;; Active-types filter — only candidates whose extension is in the active
+;;;; set, plus normal disk files when :default is active.
 
-(defn valid-file-fn [opts]                                       ;;TODO: prevent in-jar search when disk files only
-  (let [active-types (:types opts)                               ;types is a set #{:default "jar" "zip"} etc
-        exts         (remove #{:default} active-types)]
+(defn- valid-file-fn
+  "Returns a predicate over java.io.File that decides whether the file should
+  even be considered for scanning."
+  [opts]
+  (let [active-types (:types opts)
+        active-exts  (set (remove #{:default} active-types))]
     (fn [^File f]
-      (when (.isFile f)
-        (boolean
-          (or (active-types :default)                            ;; if disk files -> need to let everything through for name/path matching
-              (some #(.endsWith (.getName f) %) exts)))))))
+      (and (.isFile f)
+           (boolean
+             (or (active-types :default)
+                 (contains? active-exts (file-ext f))))))))
 
-;; cases
-;  file           flags      result                      exception
-;  ----           -----      ------
-;  normal         d          default
-;  normal         jz         <excluded by file filters>
-;  jar            d          default                     x
-;  jar            dz         default                     x
-;  jar            j          jar
-;  jar            d          default                     x
-;  zip            dz         default                     x
-;  zip            j          jar
-;  zip            j          jar
-;  zip            j          jar
+;;;; ---------------------------------------------------------------------------
+;;;; Top-level scan
 
-(defmulti file-finder
-  (fn [{:keys [^File file types]}]
-    (let [ext (file-ext file)]
-      (if (and (#{"jar" "zip"} ext)
-               (not (types ext)))
-        :default
-        ext))))
+(defn- relative-path
+  "Convert an absolute File path to one relative to search-root. Tolerates
+  trailing separators on search-root."
+  [^File search-root]
+  (let [root (.getPath search-root)
+        len  (cond-> (count root)
+               (not (str/ends-with? root File/separator)) inc)]
+    (fn [^File f] (subs (.getPath f) len))))
 
-(comment
-  (file-finder {:file (clojure.java.io/file "bob.jar")})
-  )
+(defn path-fn
+  "Return a fn File -> String producing either the canonical absolute path
+  or a path relative to search-root, depending on (:apath opts)."
+  [^File search-root opts]
+  (if (:apath opts)
+    (fn [^File f] (.getCanonicalPath f))
+    (relative-path search-root)))
 
-(defmethod file-finder "jar"
-  [{:keys [file]}]
-  {:fn      (fn [^String path opts output]
-              (find-in-jar file path opts output))
-   :desc    "files in jar files"
-   :default true
-   :char    \j})
+(defn candidate-files
+  "The lazy seq of files (under search-root) whose extension is permitted by
+  the active --types set. Pre-munge opts before calling."
+  [^File search-root opts]
+  (filter (valid-file-fn opts) (file-seq search-root)))
 
-(defmethod file-finder "zip"
-  [{:keys [file]}]
-  {:fn      (fn [^String path opts output]
-              (find-in-jar file path opts output))
-   :desc    "files in zip files"
-   :default false
-   :char    \z})
+(defn scan-file
+  "Scan a single File against output/render-cat with already-munged opts.
+  display-path is the path string (relative or absolute) to surface to the
+  user."
+  [output render-cat opts ^File f display-path]
+  (let [{:keys [scan]} (finder-for f (:types opts))]
+    (scan f display-path opts output render-cat)))
 
-(defmethod file-finder :default
-  [{:keys [file]}]
-  {:fn      (fn [^String path opts output]
-              (let [file-name      (.getName file)
-                    stream-factory #(jio/input-stream file)
-                    file-content   (wrap-file-content stream-factory output opts)]
-                (print-stream-matches output opts file-name path file-content)))
-   :desc    "normal files"
-   :default true
-   :char    \n})
-
-
-(defn munge-regexes [opts]
-  (let [{:keys [flags name grep path apath]} opts]
-    (if (not flags)
-      opts
-      (let [f (str "(?" flags ")")]
-        (reduce
-          (fn [acc k]
-            (let [v (k acc)]
-              (if v
-                (assoc acc k (re-pattern (str f (.pattern v))))
-                acc)))
-          opts
-          [:name :grep :path :apath])))))
-
-(defn perform-scan [search-root output opts]
-  (let [opts      (munge-regexes opts)
-        valid-fn  (valid-file-fn opts)
-        files     (filter #(valid-fn %)
-                          (file-seq search-root))
-        root-len  (inc (count (.getPath search-root)))
-        absolute? (:apath opts)
-        to-path   (fn [^File f]
-                    (if absolute? (.getCanonicalPath f)
-                      (subs (.getPath f) root-len)))]
-    (doseq [f files]
-      (let [finder (:fn (file-finder (assoc opts :file f)))
-            path   (to-path f)]
-        (finder path opts output)))))
+(defn perform-scan
+  "Serial scanner. Walks search-root and dispatches each candidate file to its
+  registered finder. output is a FindJarOutput sink. render-cat is the
+  cat-rendering fn supplied by main (so core stays free of ANSI/formatting
+  concerns)."
+  [^File search-root output render-cat opts]
+  (let [opts    (munge-regexes opts)
+        to-path (path-fn search-root opts)]
+    (doseq [f (candidate-files search-root opts)]
+      (scan-file output render-cat opts f (to-path f)))))

@@ -24,20 +24,20 @@
         (recur (inc i))))
     (String. buffer "UTF-8")))
 
-; TODO: test with BufferedInputStream(is, buf-size) for performance
 (defn read-is
-  "reads inputstream using a fixed byte buffer. Calls
-  (update-fn byte-buffer n-bytes-read) for each buffered read.
-  Returns total bytes read."
+  "Drain stream into a fixed byte buffer. Calls
+  (update-fn byte-buffer n-bytes-read) for each non-empty read.
+  Returns total bytes read. Terminates on EOF (negative read result)."
   ^long
   [^InputStream stream buf-size update-fn]
   (let [buf (byte-array buf-size)]
     (loop [total-len 0]
       (let [n (.read stream buf)]
-        (if (pos? n)
-          (do (when update-fn (update-fn buf n))
-              (recur (+ total-len n)))
-          total-len)))))
+        (cond
+          (neg? n) total-len
+          (zero? n) (recur total-len)
+          :else (do (when update-fn (update-fn buf n))
+                    (recur (+ total-len n))))))))
 
 (defn digest
   "Generic digest function. Given a digest algorithm supported by the

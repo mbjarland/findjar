@@ -32,6 +32,7 @@
         short        (apply str (take 7 hash))
         rev-count    (b/git-count-revs nil)
         status       (b/git-process {:git-args ["status" "--porcelain"]})
+        timestamp    (quot (System/currentTimeMillis) 1000)
         version-file "gen-resources/build/version.edn"]
     (log "generating" version-file)
     (b/write-file {:path    version-file
@@ -39,7 +40,8 @@
                              :ref-short short
                              :version   version
                              :rev-count rev-count
-                             :dirty?    (boolean status)}})))
+                             :timestamp timestamp
+                             :dirty?    (boolean (seq status))}})))
 
 (b/git-count-revs nil)
 

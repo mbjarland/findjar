@@ -10,76 +10,49 @@
   (:import [java.io PushbackReader]
            [java.text SimpleDateFormat]
            [java.util Date]
-           [org.fusesource.jansi Ansi])
-  (:gen-class))
+           [org.fusesource.jansi Ansi]))
 
-(def max-width 78)                                               ; max width to wrap the cli help section at
+(def max-width 78)
 
-(defn multimethod-meta
-  "given a multimethod, extract meta data from it and return a
-   map where the keys are the dispatch values and the values
-   are maps describing that method for the cli"
-  [multi]
-  (reduce
-    (fn [a [k v]] (assoc a k (v {})))
-    {}
-    (methods multi)))
+;;;; ---------------------------------------------------------------------------
+;;;; Registry-driven CLI metadata. Reads from c/hash-algorithms and
+;;;; c/file-finders so adding a new algorithm or file type updates --help.
 
 (defn hash-selectors
-  "returns a string with a comma separated list of the currently
-  registered (via multimethod) hash functions"
+  "Comma-separated list of registered hash algorithms (for help text)."
   []
-  (str/join
-    ", "
-    (map (fn [[_ v]] (:desc v))
-         (multimethod-meta c/calculate-hash))))
+  (str/join ", " (map :desc (vals c/hash-algorithms))))
 
 (defn parse-hash-selector
-  "parse a hash selector (sha1, md5) string from the cli into
-  the dispatch value used by the multimethod"
-  [selector]
-  (some (fn [[k {desc :desc}]] (when (= desc selector) k))
-        (multimethod-meta c/calculate-hash)))
+  "Map a CLI hash name (\"sha1\") to the registry keyword (:sha1)."
+  [s]
+  (c/hash-by-desc s))
 
 (defn file-types
-  "produces a map on the following form:
-  {\\n {:desc \"normal files\", :default true, :ext :default},
-   \\j {:desc \"files in jar files\", :default true, :ext \"jar\"},
-   \\z {:desc \"files in zip files\", :default false, :ext \"zip\"}}
-   pulls the data from the multimethod defined for file types"
+  "Invert c/file-finders into a map keyed by single-char selector:
+     {\\n {:desc \"normal files\" :default true  :ext :default}
+      \\j {:desc \"files in jars\" :default true  :ext \"jar\"}
+      ...}"
   []
   (reduce-kv
-    (fn [a k v]
-      (assoc a (:char v) {:desc    (:desc v)
-                          :default (:default v)
-                          :ext     k}))
+    (fn [a ext {:keys [desc default char]}]
+      (assoc a char {:desc desc :default default :ext ext}))
     {}
-    (multimethod-meta c/file-finder)))
+    c/file-finders))
 
-(defn file-type-selectors
-  "returns a string containing a list of file type selectors to
-  be displayed in the cli help"
-  []
+(defn file-type-selectors []
   (str/join "|" (keys (file-types))))
 
-(defn file-type-descriptions
-  "returns a display string containing the file type selectors registered by
-  the multi method"
-  []
+(defn file-type-descriptions []
   (str/join ", "
-            (map
-              (fn [[k v]] (str k " - " (:desc v)))
-              (file-types))))
+            (for [[k {:keys [desc]}] (file-types)]
+              (str k " - " desc))))
 
-(defn default-file-types
-  "returns a list containing the file types searched by default when no
-  modifying switches are provided on the cli"
-  []
-  (filter (fn [[_ v]] (:default v))
-          (file-types)))
+(defn default-file-types []
+  (filter (fn [[_ v]] (:default v)) (file-types)))
 
 (defn default-file-type-exts []
-  (set (mapv (fn [[_ v]] (:ext v)) (default-file-types))))
+  (set (map (comp :ext val) (default-file-types))))
 
 (defn wrap-line [width line]
   (let [words (str/split line #" ")]
@@ -116,20 +89,29 @@
         max-desc-width (- max-width (+ max-long-desc 8))]
     (wrap-opts max-desc-width margin opts)))
 
-(defn parse-types [types]
-  (let [m (file-types)]
-    (set (map #(:ext (get m %)) types))))
+(defn parse-types
+  "Map a string of single-char type selectors (e.g. \"jz\") to the set of
+  registered extensions (e.g. #{\"jar\" \"zip\"}). Returns nil if any char is
+  not a registered selector; the :validate clause then surfaces an error."
+  [types]
+  (let [m (file-types)
+        exts (map #(:ext (get m %)) types)]
+    (when (every? some? exts)
+      (set exts))))
 
 (defn version-string []
-  (with-open [io-reader (jio/reader (or (jio/resource "build/version.edn")
-                                        (jio/file "gen-resources/build/version.edn")))
-              pb-reader (PushbackReader. io-reader)]
-    (let [{:keys [timestamp ref-short version dirty?]} (edn/read pb-reader)
-          dev-timestamp (str (Math/round ^Double (/ (System/currentTimeMillis) 1000.0)))
-          timestamp     (Long/parseLong (or timestamp dev-timestamp))
-          format        (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
-          date          (.format format (Date. ^Long (* timestamp 1000)))]
-      (str version " - " ref-short " - " date (if dirty? " +" "")))))
+  (let [resource (or (jio/resource "build/version.edn")
+                     (let [f (jio/file "gen-resources/build/version.edn")]
+                       (when (.exists f) f)))]
+    (if-not resource
+      "dev"
+      (with-open [io-reader (jio/reader resource)
+                  pb-reader (PushbackReader. io-reader)]
+        (let [{:keys [timestamp ref-short version dirty?]} (edn/read pb-reader)
+              ts     (or timestamp (quot (System/currentTimeMillis) 1000))
+              fmt    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
+              date   (.format fmt (Date. (long (* ts 1000))))]
+          (str version " - " ref-short " - " date (when dirty? " +")))))))
 
 ;; TODO: add search-by-hash param
 ;; TODO: add -d output directory when using c
@@ -163,7 +145,7 @@
            (file-type-descriptions) ". Default: " (str/join  (map first (default-file-types))))
       :default (default-file-type-exts)
       :parse-fn parse-types
-      :validate [#(every? (comp not nil?) %) (str "type must be one of " (file-type-selectors))]]
+      :validate [some? (str "type must be a non-empty combination of " (file-type-selectors))]]
      ["-x"
       "--context <#>"
       "If -g is given, show <# of lines> lines of context around the match, defaults to 0"
@@ -189,20 +171,19 @@
       (str "calculate file hash(es) for matched files. Available algorithms: "
            (hash-selectors))
       :parse-fn parse-hash-selector
-      :assoc-fn (fn [m k v] (update-in m [k] #(into [] (conj % v))))
-      :validate [#(boolean %) (str "hash must be one of " (hash-selectors) "!")]]
+      :assoc-fn (fn [m k v] (update m k (fnil conj []) v))
+      :validate [some? (str "hash must be one of " (hash-selectors) "!")]]
+
+     [nil "--no-parallel"
+      "scan files serially (default is to scan in parallel using all available cores)"
+      :id :no-parallel]
 
      [nil "--profile"
       "internal developer option - enable profiling"]
 
      [nil "--examples"
       "print out usage examples"]
-     ;["-n"
-     ; "--no-color"
-     ; "turn off ansi coloring of matches"]
 
-     ;["-m" "--md5" "print md5 hash of matched files"]
-     ;["-s" "--sha1" "print sha1 hash of matched files"]
      ["-h"
       "--help"
       "show usage information"]]))
@@ -272,14 +253,15 @@
 
 
 (defn colorize
-  "renders a line of text, optionally using ansi colors if :monochrome is unset in
-  the first argument opts"
-  [{:keys [monochrome] :as opts} line]
-  (let [old-value (Ansi/isEnabled)
-        _         (Ansi/setEnabled (if monochrome false true))
-        line      (ansi/render line)]
-    (Ansi/setEnabled old-value)
-    line))
+  "Render a line of text, optionally using ANSI colors when :monochrome is
+  unset in opts."
+  [{:keys [monochrome]} line]
+  (let [old-value (Ansi/isEnabled)]
+    (try
+      (Ansi/setEnabled (not monochrome))
+      (ansi/render line)
+      (finally
+        (Ansi/setEnabled old-value)))))
 
 (def examples-text
   [""
@@ -438,70 +420,43 @@
       (apply str (concat (butlast xs) ["and " (last xs)])))))
 
 (defn validate-args
-  "Parse and validate command line arguments and execute accordingly."
+  "Parse and validate command line arguments."
   [args]
-  (let [parsed      (cli/parse-opts args (cli-options)
-                                    :strict true
-                                    :summary-fn summarize)
+  (let [parsed (cli/parse-opts args (cli-options)
+                               :strict true
+                               :summary-fn summarize)
         {:keys [options arguments errors summary]} parsed
-        fail        (fn [msg] {:exit-message (error-msg [msg] summary)})
-        search-root (jio/file (first arguments))]
+        fail   (fn [msg] {:exit-message (error-msg [msg] summary)})
+        opts   (-> options
+                   (assoc :parallel (not (:no-parallel options)))
+                   (dissoc :no-parallel))
+        search-root (some-> arguments first jio/file)]
     (cond
       (:examples options)
-      {:exit-message (examples options) :ok? true}               ; examples => exit OK with examples
+      {:exit-message (examples options) :ok? true}
 
       (:help options)
-      {:exit-message (usage summary) :ok? true}                  ; help => exit OK with usage summary
+      {:exit-message (usage summary) :ok? true}
 
-      ;(and (:out-file options)
-      ;     (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
-
-      (and (:apath options)
-           (:path options))
+      (and (:apath options) (:path options))
       (fail "can not use path (-p) and apath (-a) together")
 
       errors
-      {:exit-message (error-msg errors summary)}                 ; errors => exit with description of errors
+      {:exit-message (error-msg errors summary)}
 
-      (= 0 (count arguments))
+      (zero? (count arguments))
       (fail "no search root provided")
 
-      (> 1 (count arguments))
+      (< 1 (count arguments))
       (fail (str "multiple search-roots provided: " (english-list arguments)))
 
       (not (.isDirectory search-root))
       (fail (str "invalid non-directory search root: " search-root))
 
-      :else {:search-root search-root
-             :opts        options})))                            ; failed custom validation => exit with usage summary
+      :else
+      {:search-root search-root :opts opts})))
 
 (defn exit [status msg]
   (println msg)
   (System/exit status))
 
-(comment
-  ;; print opts in repl
-  (cli/parse-opts ["-h"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  ;; provide multiple hash algorithms
-  (cli/parse-opts ["-s" "sha1" "-s" "md5"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  ;; parse a real set of opts
-  (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  (cli/parse-opts ["." "-n" ".clj" "-t" "zd"]
-
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  )
