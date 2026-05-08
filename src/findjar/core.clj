@@ -174,13 +174,14 @@
   path/apath filters and then run the requested operation. Locals are renamed
   away from clojure.core fns (name, hash) so the body stays readable."
   [output opts file-name file-path stream-factory render-cat]
-  (let [name-pat   (:name opts)
-        grep-pat   (:grep opts)
-        path-pat   (:path opts)
-        apath-pat  (:apath opts)
-        cat?       (:cat opts)
-        hash-types (:hash opts)
-        macro-op   (or cat? hash-types)]
+  (let [name-pat    (:name opts)
+        grep-pat    (:grep opts)
+        path-pat    (:path opts)
+        apath-pat   (:apath opts)
+        cat?        (:cat opts)
+        files-only? (:files-only opts)
+        hash-types  (:hash opts)
+        macro-op    (or cat? hash-types)]
     (cond
       (and name-pat  (not (re-find name-pat  file-name))) nil
       (and path-pat  (not (re-find path-pat  file-path))) nil
@@ -194,6 +195,11 @@
       hash-types (calculate-hashes output file-path stream-factory hash-types opts)
       cat?       (when-let [s (render-cat output file-path stream-factory opts)]
                    (p/dump-stream output file-path s opts))
+      ;; -l / --files-only: collapse grep to a single path emission per
+      ;; matching file. Cheap-exits on first match via line-seq + some.
+      (and grep-pat files-only?)
+      (when (stream-line-matches? output opts stream-factory grep-pat)
+        (p/match output file-path opts))
       grep-pat   (grep-stream output file-path stream-factory opts))))
 
 ;;;; ---------------------------------------------------------------------------
@@ -278,6 +284,16 @@
 ;;;; ---------------------------------------------------------------------------
 ;;;; Top-level scan
 
+(def default-excluded-dirs
+  "Directory names skipped during traversal unless --all is set. Common
+  build/VCS dirs that are almost never the target of a search and that
+  dominate scan time on real projects."
+  #{".git" ".svn" ".hg" ".bzr"
+    "node_modules"
+    "target" "build"
+    ".gradle" ".cpcache"
+    ".idea" ".vscode"})
+
 (defn- relative-path
   "Convert an absolute File path to one relative to search-root. Tolerates
   trailing separators on search-root."
@@ -288,18 +304,36 @@
     (fn [^File f] (subs (.getPath f) len))))
 
 (defn path-fn
-  "Return a fn File -> String producing either the canonical absolute path
-  or a path relative to search-root, depending on (:apath opts)."
+  "Return a fn File -> String producing the path representation chosen by
+  opts:
+    :apath true        — canonical absolute path
+    :include-root? true — File.getPath as-is (search-root prefix preserved)
+    otherwise          — path relative to search-root
+  include-root? is set by main when there's more than one search root, so
+  paths are unambiguous between roots."
   [^File search-root opts]
-  (if (:apath opts)
-    (fn [^File f] (.getCanonicalPath f))
-    (relative-path search-root)))
+  (cond
+    (:apath opts)         (fn [^File f] (.getCanonicalPath f))
+    (:include-root? opts) (fn [^File f] (.getPath f))
+    :else                 (relative-path search-root)))
+
+(defn- pruning-file-seq
+  "Like file-seq but does not descend into directories whose name is in
+  excluded. The directory itself still appears in the seq (and gets
+  filtered out by valid-file-fn since it's not a file)."
+  [^File root excluded]
+  (tree-seq
+    (fn [^File f] (and (.isDirectory f) (not (contains? excluded (.getName f)))))
+    (fn [^File d] (seq (.listFiles d)))
+    root))
 
 (defn candidate-files
   "The lazy seq of files (under search-root) whose extension is permitted by
-  the active --types set. Pre-munge opts before calling."
+  the active --types set. Skips default-excluded-dirs unless (:all opts) is
+  truthy. Pre-munge opts before calling."
   [^File search-root opts]
-  (filter (valid-file-fn opts) (file-seq search-root)))
+  (let [excluded (if (:all opts) #{} default-excluded-dirs)]
+    (filter (valid-file-fn opts) (pruning-file-seq search-root excluded))))
 
 (defn scan-file
   "Scan a single File against output/render-cat with already-munged opts.

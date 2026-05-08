@@ -141,26 +141,34 @@
 ;;;; ---------------------------------------------------------------------------
 ;;;; Entry point
 
-(defn- run-scan [search-root opts]
-  (let [output (default-output)
-        scan   (if (false? (:parallel opts))
-                 c/perform-scan
-                 buf/parallel-scan)]
-    (scan search-root output render-cat opts)))
+(defn- run-scan [search-roots opts]
+  (let [output    (default-output)
+        scan      (if (false? (:parallel opts))
+                    c/perform-scan
+                    buf/parallel-scan)
+        ;; With multiple roots, include the root prefix in path output so
+        ;; results are unambiguous between roots. Single root keeps the
+        ;; existing relative-from-root behaviour. --apath always wins.
+        opts      (cond-> opts
+                    (and (< 1 (count search-roots))
+                         (not (:apath opts)))
+                    (assoc :include-root? true))]
+    (doseq [root search-roots]
+      (scan root output render-cat opts))))
 
 (defn main-entrypoint
   "Shared by -main and repl-main. hard-exit-on-errors? controls whether bad
   CLI args call System/exit."
   [hard-exit-on-errors? args]
   (tufte/add-basic-println-handler! {})
-  (let [{:keys [search-root opts exit-message ok?]} (cli/validate-args args)
+  (let [{:keys [search-roots opts exit-message ok?]} (cli/validate-args args)
         profile? (:profile opts)]
     (if exit-message
       (if hard-exit-on-errors?
         (cli/exit (if ok? 0 1) exit-message)
         (println "would exit with code" (if ok? 0 1) "msg," exit-message))
       (tufte/profile {:when profile? :nmax 10000000}
-                     (run-scan search-root opts)))))
+                     (run-scan search-roots opts)))))
 
 (defn -main [& args]
   (try

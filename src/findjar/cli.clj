@@ -163,9 +163,16 @@
       "--cat"
       "cat file. For matching files, print the entire file contents on the console"]
 
+     ["-l"
+      "--files-only"
+      "with -g, print only the paths of matching files (no line numbers or content)"]
+
      ["-m"
       "--monochrome"
       "turn off ansi-coloring of matching content lines"]
+
+     [nil "--all"
+      "search every directory. By default findjar skips common build/VCS dirs like .git, node_modules, target, build, .cpcache, .idea, .vscode, .gradle, .svn, .hg"]
 
      ["-s" "--hash <algo>"
       (str "calculate file hash(es) for matched files. Available algorithms: "
@@ -436,7 +443,10 @@
         opts   (-> options
                    (assoc :parallel (not (:no-parallel options)))
                    (dissoc :no-parallel))
-        search-root (some-> arguments first jio/file)]
+        ;; No positional => search current directory.
+        roots-strs  (if (empty? arguments) ["."] arguments)
+        search-roots (mapv jio/file roots-strs)
+        bad-roots    (remove #(.isDirectory ^java.io.File %) search-roots)]
     (cond
       (:examples options)
       {:exit-message (examples options) :ok? true}
@@ -450,17 +460,13 @@
       errors
       {:exit-message (error-msg errors summary)}
 
-      (zero? (count arguments))
-      (fail "no search root provided")
-
-      (< 1 (count arguments))
-      (fail (str "multiple search-roots provided: " (english-list arguments)))
-
-      (not (.isDirectory search-root))
-      (fail (str "invalid non-directory search root: " search-root))
+      (seq bad-roots)
+      (fail (str "non-directory search root"
+                 (when (< 1 (count bad-roots)) "s") ": "
+                 (english-list (mapv str bad-roots))))
 
       :else
-      {:search-root search-root :opts opts})))
+      {:search-roots search-roots :opts opts})))
 
 (defn exit [status msg]
   (println msg)
