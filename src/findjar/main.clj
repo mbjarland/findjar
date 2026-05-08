@@ -49,13 +49,15 @@
            (apply str)))))
 
 ;;;; ---------------------------------------------------------------------------
-;;;; Cat rendering — stream lines, format on the fly. Returns the formatted
-;;;; string (with optional ANSI) ready for emission.
+;;;; Cat rendering — two streaming passes (count, then format). Width is
+;;;; computed exactly so single-line files don't carry max-pad whitespace and
+;;;; large files still pad correctly. Each pass calls stream-factory afresh
+;;;; (cheap for disk files; safe for jar entries while the ZipFile is open).
 
-;; Fixed-width line-number column. Files with more than 999999 lines simply
-;; lose alignment past the cap — they still render correctly. Avoiding a
-;; precount keeps cat usable on large files.
-(def ^:private cat-pad-width 6)
+(defn- count-lines [output opts stream-factory]
+  (or (c/with-reader output opts stream-factory
+        (fn [reader] (count (line-seq reader))))
+      0))
 
 (defn render-cat
   "Materialize stream-factory's content as a printable cat block. When
@@ -65,7 +67,7 @@
   [output path stream-factory opts]
   (let [to-file? (some? (:out-file opts))
         grep     (:grep opts)
-        fmt      (str "%" cat-pad-width "d ")]
+        max-w    (count (str (count-lines output opts stream-factory)))]
     (c/with-reader output opts stream-factory
       (fn [reader]
         (binding [*use-colors* (and (not to-file?) (use-colors? opts))]
@@ -76,7 +78,12 @@
                     line   (if (seq idxs)
                              (highlight-matches true line idxs red)
                              line)
-                    prefix (if to-file? "" (format fmt (inc n)))]
+                    display (inc n)
+                    pad-len (- max-w (count (str display)))
+                    prefix  (if to-file?
+                              ""
+                              (str (apply str (repeat pad-len \space))
+                                   display " "))]
                 (println (str (style green prefix) line))))
             (println (style red ">>>>>>>"))))))))
 
@@ -84,12 +91,18 @@
 ;;;; Default FindJarOutput — emits to *out* (and -o file when configured)
 
 (defn- format-grep-line [max-line-# {:keys [path line-# hit? line match-idxs]} opts]
+  ;; Padding intentionally matches the master output verbatim: the bare
+  ;; display number, then (inc (- width len)) trailing spaces. Users may
+  ;; have scripts parsing this output; preserve byte-for-byte compat.
   (let [context? (pos? (or (:context opts) 0))
+        display  (inc line-#)
         width    (count (str max-line-#))
-        num-col  (format (str "%" width "d ") (inc line-#))]
+        len      (count (str display))
+        pad      (apply str (repeat (inc (- width len)) \space))]
     (str path
          (if (and (not hit?) context?) " " ":")
-         num-col
+         display
+         pad
          (highlight-matches hit? line match-idxs red))))
 
 (defn default-output
@@ -115,7 +128,9 @@
           (with-open [w (jio/writer of :append true)]
             (.write w ^String materialized)
             (println path ">>" (.getPath of)))
-          (print materialized))))
+          ;; println (not print) to preserve master's trailing blank line
+          ;; between consecutive cat blocks — scripts may rely on it.
+          (println materialized))))
 
     (print-hash [_ path hash-type hash-value opts]
       (binding [*use-colors* (use-colors? opts)]
