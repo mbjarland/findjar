@@ -1,0 +1,252 @@
+.\" findjar(1) — search files and the contents of jar/zip archives
+.TH FINDJAR 1 "May 2026" "findjar" "User Commands"
+.SH NAME
+findjar \- search files and the contents of jar/zip archives
+.SH SYNOPSIS
+.B findjar
+.RI [ search-root ".\|.\|.] [" options ]
+.SH DESCRIPTION
+.B findjar
+searches files on disk and inside jar/zip archives, with regex matching for file names, paths, and content.
+It is intended for JVM developers tracking down classes, source files, or strings across a maven repo, classpath, or set of jars.
+With
+.B \-\-nested
+it also descends into jars-inside-jars (uberjars, Spring Boot fatjars, Pants/Bazel uberjars, etc.).
+
+With no
+.IR search-root ,
+findjar searches the current directory.
+Multiple
+.IR search-root s
+are scanned in order; result paths are prefixed with the root they came from so they are unambiguous between roots.
+
+For paths inside archives, path patterns
+.RB ( \-p ", " \-a )
+match against
+.IR <path-to-jar>@<path-within-jar> .
+
+.SH OPTIONS
+
+.SS Filtering
+.TP
+.BI \-n " regex" ", " \-\-name " regex"
+Match against file name.
+.TP
+.BI \-p " regex" ", " \-\-path " regex"
+Match against path relative to the search-root.
+.TP
+.BI \-a " regex" ", " \-\-apath " regex"
+Match against absolute path.
+.TP
+.BI \-G " glob" ", " \-\-glob " glob"
+Match against file name as a shell glob (e.g.
+.IR \(dq*.clj\(dq )
+instead of regex.
+Mutually exclusive with
+.BR \-n .
+.TP
+.BI \-g " regex" ", " \-\-grep " regex"
+Match against file content lines.
+.TP
+.BI \-f " flags" ", " \-\-flags " flags"
+Apply the given Pattern flag chars (i, m, s, u, x, d) to every regex.
+.TP
+.BI \-t " types" ", " \-\-types " types"
+Restrict file types: n (normal files), j (entries in jars), z (entries in zips). Default: nj.
+
+.SS Action
+.TP
+.BR \-c ", " \-\-cat
+Print the entire contents of matching files (with line numbers).
+.TP
+.BR \-l ", " \-\-files-only
+With
+.BR \-g ,
+print one path per matching file instead of every matching line.
+.TP
+.BI \-s " algo" ", " \-\-hash " algo"
+Print file hash. Output is
+.IR \(dq<hex> <algo> <path>\(dq .
+Algorithms: md5, sha1, sha256, sha512, crc32. Repeat
+.B \-s
+to print several.
+.TP
+.BI \-\-find\-by\-hash " algo:hex"
+Find every file whose hash equals
+.IR hex ;
+e.g.
+.IR sha1:da39a3ee...\& .
+Repeatable.
+.TP
+.BR \-q ", " \-\-quiet
+Suppress all output. Exit status 0 if any match was found, 1 otherwise.
+
+.SS Output
+.TP
+.BI \-x " n" ", " \-\-context " n"
+With
+.BR \-g ,
+show
+.I n
+lines of symmetric context around each match.
+.TP
+.BI \-A " n" ", " \-\-after " n"
+With
+.BR \-g ,
+show
+.I n
+lines after each match.
+.TP
+.BI \-B " n" ", " \-\-before " n"
+With
+.BR \-g ,
+show
+.I n
+lines before each match.
+.TP
+.BI \-\-output " fmt"
+Output format:
+.B text
+(default) or
+.BR json .
+JSON output emits one object per line.
+.TP
+.BI \-o " path" ", " \-\-out\-file " path"
+With
+.BR \-c ,
+append output to
+.I path
+instead of stdout.
+.TP
+.BR \-m ", " \-\-monochrome
+Disable ANSI coloring of matches. The
+.B NO_COLOR
+environment variable also disables coloring.
+
+.SS Scanning
+.TP
+.B \-\-all
+Traverse every directory. By default findjar skips
+.IR .git ,
+.IR .svn ,
+.IR .hg ,
+.IR .bzr ,
+.IR node_modules ,
+.IR target ,
+.IR build ,
+.IR .gradle ,
+.IR .cpcache ,
+.IR .idea ,
+.IR .vscode ,
+plus any paths matched by
+.I .gitignore
+at each search-root.
+.TP
+.BR \-L ", " \-\-follow
+Follow symbolic links during traversal (default: don't follow).
+.TP
+.BI \-\-max\-depth " n"
+Do not descend more than
+.I n
+directory levels below each search-root.
+.TP
+.BI \-\-exclude " name"
+Skip directories with this name. Repeatable; adds to the default exclude list.
+.TP
+.B \-\-no\-gitignore
+Do not honor
+.I .gitignore
+files in search-roots.
+.TP
+.B \-\-text
+With
+.BR \-g ,
+do not skip files that look binary (NUL bytes in the first 8 KB).
+.TP
+.B \-\-no\-parallel
+Scan files serially. Default is parallel using ~ cores+2 workers.
+.TP
+.BI \-\-parallel\-jobs " n"
+Cap the number of concurrent scan workers. Useful on HDD or networked filesystems.
+.TP
+.B \-\-nested
+Recurse into jars/zips that appear as entries inside other jars/zips. Path takes the form
+.IR outer.jar@inner.jar@entry .
+
+.SS Misc
+.TP
+.B \-\-examples
+Print usage examples and exit.
+.TP
+.BR \-V ", " \-\-version
+Print version and exit.
+.TP
+.BR \-h ", " \-\-help
+Show help and exit.
+
+.SH EXIT STATUS
+.TP
+.B 0
+Success (or, with
+.BR \-q ,
+at least one match was found).
+.TP
+.B 1
+Bad CLI args, or
+.B \-q
+was set and nothing matched.
+
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+If set to a non-empty value, ANSI coloring is disabled.
+
+.SH EXAMPLES
+.PP
+Default to current directory:
+.PP
+.RS
+findjar -g TODO
+.RE
+.PP
+Glob match across a maven cache:
+.PP
+.RS
+findjar ~/.m2 -G '*.clj'
+.RE
+.PP
+Multi-algo hash for a file inside a jar:
+.PP
+.RS
+findjar ~/.m2 -n string.clj -t j -s sha1 -s md5
+.RE
+.PP
+Find every copy of a file by hash:
+.PP
+.RS
+findjar ~/.m2 --find-by-hash sha1:da39a3ee5e6b4b0d3255bfef95601890afd80709
+.RE
+.PP
+Recurse into uberjars:
+.PP
+.RS
+findjar app.jar --nested -n MANIFEST.MF
+.RE
+.PP
+JSON output for editor / jq pipelines:
+.PP
+.RS
+findjar . -g TODO --output json | jq -s 'group_by(.path)'
+.RE
+
+.SH AUTHOR
+Matias Bjarland <mbjarland@gmail.com>
+
+.SH LICENSE
+Eclipse Public License v2.0.
+
+.SH SEE ALSO
+.BR find (1),
+.BR grep (1),
+.BR rg (1),
+.BR jq (1).

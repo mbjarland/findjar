@@ -1,0 +1,193 @@
+
+Examples:
+
+(paths abbreviated with '...' for readability)
+
+  1. List every file under the current directory (and inside any .jar
+     entries). With no search-root, findjar defaults to '.':
+
+     @|bold ~> findjar|@
+
+     src/foo.clj
+     src/bar/baz.clj
+     .../some-lib.jar@META-INF/MANIFEST.MF
+     ...
+
+  2. Find files by name across a maven cache. -n matches the file
+     name, -p matches the (relative) path, -a matches the absolute
+     path:
+
+     @|bold ~> findjar ~/.m2 -n "string.clj"|@
+
+     .../clojure-1.9.0.jar@clojure/string.clj
+     .../clojure-1.7.0.jar@clojure/string.clj
+     .../octet-1.1.0.jar@octet/spec/string.cljc
+     ...
+
+  3. Match by glob (-G) instead of regex. Quote it so the shell
+     doesn't expand the * itself:
+
+     @|bold ~> findjar . -G "*.clj"|@
+
+  4. Grep file contents with a regex. -t j restricts to entries inside
+     jar files. Symmetric (-x) or asymmetric (-A / -B) context:
+
+     @|bold ~> findjar ~/.m2 -n clj -g "Rich Hickey" -t j -x 1|@
+
+     .../clojure-1.9.0.jar@clojure/set.clj 9  (ns ^{:doc "Set ops...
+     .../clojure-1.9.0.jar@clojure/set.clj:10       :@|red author "Rich Hickey|@"}
+     .../clojure-1.9.0.jar@clojure/set.clj 11       clojure.set)
+     ...
+
+     @|bold ~> findjar . -g "throw new" -A 3|@   # 3 lines AFTER each match
+
+  5. Print only the paths of files that contain a match (-l). Pipe to
+     your editor or to xargs:
+
+     @|bold ~> findjar . -g "TODO" -l|@
+
+     src/foo.clj
+     src/bar/baz.clj
+
+     @|bold ~> findjar . -g "TODO" -l | xargs $EDITOR|@
+
+  6. Cat an entry inside a jar (with line numbers and intra-line
+     highlighting when combined with -g):
+
+     @|bold ~> findjar ~/.m2 -n MANIFEST.MF -c -t j|@
+
+     @|red <<<<<<<|@ .../clojure-1.9.0.jar@META-INF/MANIFEST.MF
+     @|green 1|@ Manifest-Version: 1.0
+     @|green 2|@ Created-By: Apache Maven
+     @|green 3|@ Main-Class: clojure.main
+     @|red >>>>>>>|@
+
+  7. Compute one or more file hashes. Each line includes the algorithm
+     name so multiple -s flags are unambiguous:
+
+     @|bold ~> findjar ~/.m2 -n string.clj -t j -s sha1 -s md5|@
+
+     94a86681b58d556f1eb13a... sha1 .../clojure-1.9.0.jar@clojure/string.clj
+     f05f65fa44628a954970...   md5  .../clojure-1.9.0.jar@clojure/string.clj
+     7444756fa91b65...         sha1 .../clojure-1.7.0.jar@clojure/string.clj
+     ...
+
+  8. Search several roots in one invocation. Result paths include the
+     root prefix so they're unambiguous:
+
+     @|bold ~> findjar ~/.m2 ~/.gradle -n core.clj -t j|@
+
+     /Users/me/.m2/.../clojure-1.11.1.jar@clojure/core.clj
+     /Users/me/.gradle/caches/.../core.clj
+     ...
+
+  9. Find every copy of a known file by hash (--find-by-hash). The
+     dual of -s — useful for "which library actually shipped this
+     class?" or "is this binary identical to upstream?":
+
+     a) Get the hash of a file you have:
+
+     @|bold ~> findjar ./jars/clojure-1.9.0.jar@clojure/core.clj -s sha1|@
+
+     8b86d29c79f3d34d5dba0c50f0c8e6abf6e9b41a sha1 .../core.clj
+
+     b) Find every copy of that exact file across your maven cache,
+        gradle cache, and a vendored libs dir:
+
+     @|bold ~> findjar ~/.m2 ~/.gradle ./vendor --find-by-hash sha1:8b86d29c79f3d34d5dba0c50f0c8e6abf6e9b41a|@
+
+     /Users/me/.m2/.../clojure-1.9.0.jar@clojure/core.clj
+     /Users/me/.gradle/.../clojure-1.9.0.jar@clojure/core.clj
+
+     c) Repeatable for finding several artifacts in one pass:
+
+     @|bold ~> findjar ~/.m2 --find-by-hash sha1:8b86d29c... --find-by-hash sha1:cccc31...|@
+
+ 10. Recurse into nested archives (--nested). Critical for inspecting
+     uberjars / Spring Boot fatjars / Pants & Bazel jar bundles, where
+     the real classes live one or two layers deep. Path takes the form
+     outer.jar@inner.jar@entry:
+
+     a) List every entry inside a Spring Boot fat jar's nested libs:
+
+     @|bold ~> findjar app.jar --nested -t j|@
+
+     app.jar@BOOT-INF/lib/spring-core-6.1.0.jar@org/.../Assert.class
+     app.jar@BOOT-INF/lib/jackson-core-2.16.1.jar@com/.../JsonParser.class
+     ...
+
+     b) Grep across every nested jar in one go:
+
+     @|bold ~> findjar app.jar --nested -t j -g "version=" -n .properties|@
+
+     c) Find a specific class buried inside an uberjar:
+
+     @|bold ~> findjar build/libs --nested -n "DataSourceConfig.class"|@
+
+     build/libs/app.jar@BOOT-INF/lib/spring-jdbc-6.1.0.jar@.../DataSourceConfig.class
+
+     d) Combined with --find-by-hash: locate every fat jar that bundles
+        a specific class version:
+
+     @|bold ~> findjar ~/.m2 --nested --find-by-hash sha1:cf2bcdc...|@
+
+ 11. By default findjar skips .git, node_modules, target, build,
+     .gradle, .cpcache, .idea, .vscode, .svn, .hg, plus anything in
+     .gitignore at each search-root. Three knobs to override:
+
+     @|bold ~> findjar . -g build-version --all|@                   # walk everything
+     @|bold ~> findjar . -g build-version --no-gitignore|@          # ignore .gitignore only
+     @|bold ~> findjar . -g build-version --exclude dist --exclude out|@
+
+ 12. Symbolic links are NOT followed by default (a common cause of
+     runaway scans). Pass -L to follow:
+
+     @|bold ~> findjar /opt/app -L -g 'CVE-' -t j|@
+
+ 13. Limit traversal depth with --max-depth (root's direct children
+     are depth 1):
+
+     @|bold ~> findjar / --max-depth 3 -n '*.cfg'|@
+
+ 14. Case-insensitive matching: -f i applies the regex CASE_INSENSITIVE
+     flag to every pattern. Other flags: m s u x d:
+
+     @|bold ~> findjar ~/.m2 -g "rich hickey" -fi -t j|@
+
+ 15. JSON output — one object per line (jsonl), suitable for piping
+     into jq, grep, or for editor / LLM integrations:
+
+     @|bold ~> findjar . -g "TODO" --output json|@
+
+     {"kind":"grep","path":"src/foo.clj","line":42,"hit?":true,"text":"  ;; TODO ..."}
+     {"kind":"grep","path":"src/bar.clj","line":17,"hit?":true,"text":"  ;; TODO ..."}
+
+     a) Count TODOs per file:
+
+     @|bold ~> findjar . -g "TODO" --output json | jq -s 'group_by(.path) | map({path: .[0].path, count: length})'|@
+
+     b) Get unique paths that match (alternative to -l):
+
+     @|bold ~> findjar . -g "TODO" --output json | jq -r '.path' | sort -u|@
+
+     c) Pull the bare hex out of -s output for a digest manifest:
+
+     @|bold ~> findjar lib/ -t j -s sha256 --output json | jq -r '"\(.hex)  \(.path)"'|@
+
+ 16. Quiet mode — no output, exit 0 if any match was found, 1 otherwise.
+     Useful in shell scripts:
+
+     @|bold ~> if findjar . -n config.edn -q; then echo "found"; fi|@
+
+     @|bold ~> findjar . -n suspicious -q && curl -X POST .../alert|@
+
+ 17. For very large scans (HDD or networked filesystems), bound the
+     parallel worker count or scan serially:
+
+     @|bold ~> findjar /mnt/slow-disk -g 'TODO' --parallel-jobs 4|@
+     @|bold ~> findjar /mnt/slow-disk -g 'TODO' --no-parallel|@
+
+ 18. Honor the NO_COLOR convention (or use -m):
+
+     @|bold ~> NO_COLOR=1 findjar . -g 'fn ' | less|@
+     @|bold ~> findjar . -g 'fn ' -m | less|@

@@ -10,76 +10,49 @@
   (:import [java.io PushbackReader]
            [java.text SimpleDateFormat]
            [java.util Date]
-           [org.fusesource.jansi Ansi])
-  (:gen-class))
+           [org.fusesource.jansi Ansi]))
 
-(def max-width 78)                                               ; max width to wrap the cli help section at
+(def max-width 78)
 
-(defn multimethod-meta
-  "given a multimethod, extract meta data from it and return a
-   map where the keys are the dispatch values and the values
-   are maps describing that method for the cli"
-  [multi]
-  (reduce
-    (fn [a [k v]] (assoc a k (v {})))
-    {}
-    (methods multi)))
+;;;; ---------------------------------------------------------------------------
+;;;; Registry-driven CLI metadata. Reads from c/hash-algorithms and
+;;;; c/file-finders so adding a new algorithm or file type updates --help.
 
 (defn hash-selectors
-  "returns a string with a comma separated list of the currently
-  registered (via multimethod) hash functions"
+  "Comma-separated list of registered hash algorithms (for help text)."
   []
-  (str/join
-    ", "
-    (map (fn [[_ v]] (:desc v))
-         (multimethod-meta c/calculate-hash))))
+  (str/join ", " (map :desc (vals c/hash-algorithms))))
 
 (defn parse-hash-selector
-  "parse a hash selector (sha1, md5) string from the cli into
-  the dispatch value used by the multimethod"
-  [selector]
-  (some (fn [[k {desc :desc}]] (when (= desc selector) k))
-        (multimethod-meta c/calculate-hash)))
+  "Map a CLI hash name (\"sha1\") to the registry keyword (:sha1)."
+  [s]
+  (c/hash-by-desc s))
 
 (defn file-types
-  "produces a map on the following form:
-  {\\n {:desc \"normal files\", :default true, :ext :default},
-   \\j {:desc \"files in jar files\", :default true, :ext \"jar\"},
-   \\z {:desc \"files in zip files\", :default false, :ext \"zip\"}}
-   pulls the data from the multimethod defined for file types"
+  "Invert c/file-finders into a map keyed by single-char selector:
+     {\\n {:desc \"normal files\" :default true  :ext :default}
+      \\j {:desc \"files in jars\" :default true  :ext \"jar\"}
+      ...}"
   []
   (reduce-kv
-    (fn [a k v]
-      (assoc a (:char v) {:desc    (:desc v)
-                          :default (:default v)
-                          :ext     k}))
+    (fn [a ext {:keys [desc default char]}]
+      (assoc a char {:desc desc :default default :ext ext}))
     {}
-    (multimethod-meta c/file-finder)))
+    c/file-finders))
 
-(defn file-type-selectors
-  "returns a string containing a list of file type selectors to
-  be displayed in the cli help"
-  []
+(defn file-type-selectors []
   (str/join "|" (keys (file-types))))
 
-(defn file-type-descriptions
-  "returns a display string containing the file type selectors registered by
-  the multi method"
-  []
+(defn file-type-descriptions []
   (str/join ", "
-            (map
-              (fn [[k v]] (str k " - " (:desc v)))
-              (file-types))))
+            (for [[k {:keys [desc]}] (file-types)]
+              (str k " - " desc))))
 
-(defn default-file-types
-  "returns a list containing the file types searched by default when no
-  modifying switches are provided on the cli"
-  []
-  (filter (fn [[_ v]] (:default v))
-          (file-types)))
+(defn default-file-types []
+  (filter (fn [[_ v]] (:default v)) (file-types)))
 
 (defn default-file-type-exts []
-  (set (mapv (fn [[_ v]] (:ext v)) (default-file-types))))
+  (set (map (comp :ext val) (default-file-types))))
 
 (defn wrap-line [width line]
   (let [words (str/split line #" ")]
@@ -116,20 +89,29 @@
         max-desc-width (- max-width (+ max-long-desc 8))]
     (wrap-opts max-desc-width margin opts)))
 
-(defn parse-types [types]
-  (let [m (file-types)]
-    (set (map #(:ext (get m %)) types))))
+(defn parse-types
+  "Map a string of single-char type selectors (e.g. \"jz\") to the set of
+  registered extensions (e.g. #{\"jar\" \"zip\"}). Returns nil if any char is
+  not a registered selector; the :validate clause then surfaces an error."
+  [types]
+  (let [m (file-types)
+        exts (map #(:ext (get m %)) types)]
+    (when (every? some? exts)
+      (set exts))))
 
 (defn version-string []
-  (with-open [io-reader (jio/reader (or (jio/resource "build/version.edn")
-                                        (jio/file "gen-resources/build/version.edn")))
-              pb-reader (PushbackReader. io-reader)]
-    (let [{:keys [timestamp ref-short version dirty?]} (edn/read pb-reader)
-          dev-timestamp (str (Math/round ^Double (/ (System/currentTimeMillis) 1000.0)))
-          timestamp     (Long/parseLong (or timestamp dev-timestamp))
-          format        (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
-          date          (.format format (Date. ^Long (* timestamp 1000)))]
-      (str version " - " ref-short " - " date (if dirty? " +" "")))))
+  (let [resource (or (jio/resource "build/version.edn")
+                     (let [f (jio/file "gen-resources/build/version.edn")]
+                       (when (.exists f) f)))]
+    (if-not resource
+      "dev"
+      (with-open [io-reader (jio/reader resource)
+                  pb-reader (PushbackReader. io-reader)]
+        (let [{:keys [timestamp ref-short version dirty?]} (edn/read pb-reader)
+              ts     (or timestamp (quot (System/currentTimeMillis) 1000))
+              fmt    (SimpleDateFormat. "yyyy.MM.dd HH:mm:ss")
+              date   (.format fmt (Date. (long (* ts 1000))))]
+          (str version " - " ref-short " - " date (when dirty? " +")))))))
 
 ;; TODO: add search-by-hash param
 ;; TODO: add -d output directory when using c
@@ -137,296 +119,193 @@
 (defn cli-options []
   (reformat-options
     max-width
-    [;; First three strings describe a short-option, long-option with optional
-     ;; example argument description, and a description. All three are optional
-     ;; and positional.
-     ["-p"
-      "--path <regex>"
-      "a pattern to match against the relative path (including file name) starting from search-root"
-      :parse-fn #(re-pattern %)]
-     ["-a"
-      "--apath <regex>"
-      "a pattern to match against the absolute path (including file name)"
-      :parse-fn #(re-pattern %)]
-     ["-n"
-      "--name <regex>"
-      "a pattern to match against file names"
-      :parse-fn #(re-pattern %)]
-     ["-g"
-      "--grep <regex>"
-      "a pattern to match against file content lines"
-      :parse-fn #(re-pattern %)]
-     ["-t"
-      (str "--types <" (file-type-selectors) ">")
-      (str "restrict the files searched to only the type(s) specified. "
-           "The list of supported file types is extensible. Available file types: "
-           (file-type-descriptions) ". Default: " (str/join  (map first (default-file-types))))
+    [["-n" "--name <regex>"   "match against file name"
+      :parse-fn re-pattern]
+     ["-p" "--path <regex>"   "match against path relative to search-root"
+      :parse-fn re-pattern]
+     ["-a" "--apath <regex>"  "match against absolute path"
+      :parse-fn re-pattern]
+     ["-g" "--grep <regex>"   "match against file content lines"
+      :parse-fn re-pattern]
+     ["-f" "--flags <flags>"
+      "regex flags applied to every pattern. Combine any of: i (case-insensitive), m (multiline), s (dotall), u (unicode-case), x (comments), d (unix-lines)."
+      :validate [#(empty? (c/unknown-flag-chars %))
+                 "must be a combination of i, m, s, u, x, d"]]
+     ["-t" (str "--types <" (file-type-selectors) ">")
+      (str "restrict file types: " (file-type-descriptions) ". Default: "
+           (str/join (map first (default-file-types))))
       :default (default-file-type-exts)
       :parse-fn parse-types
-      :validate [#(every? (comp not nil?) %) (str "type must be one of " (file-type-selectors))]]
-     ["-x"
-      "--context <#>"
-      "If -g is given, show <# of lines> lines of context around the match, defaults to 0"
-      :parse-fn #(Integer/parseInt %)]
-     ["-o"
-      "--out-file <path>"
-      "when using -c (cat file), write the contents of the located file(s) to the output file"
-      :parse-fn #(clojure.java.io/as-file %)]
-     ["-f"
-      "--flags <flags>"
-      "turns on regex flags for all matches used. Example: '-f i' turns on case insensitive matching for both file names and content. See oracle javadocs on
-       java.util.regex.Pattern (special constructs > match flags) for details on java regex flags"]
+      :validate [some? (str "type must be a non-empty combination of "
+                            (file-type-selectors))]]
 
-     ["-c"
-      "--cat"
-      "cat file. For matching files, print the entire file contents on the console"]
-
-     ["-m"
-      "--monochrome"
-      "turn off ansi-coloring of matching content lines"]
-
+     ["-c" "--cat"
+      "print the entire contents of matching files (with line numbers)"]
+     ["-l" "--files-only"
+      "with -g, print one path per matching file instead of every matching line"]
      ["-s" "--hash <algo>"
-      (str "calculate file hash(es) for matched files. Available algorithms: "
-           (hash-selectors))
+      (str "print file hash. Output format: '<hex> <algo> <path>'. Algorithms: "
+           (hash-selectors) ". Repeat -s to print several.")
       :parse-fn parse-hash-selector
-      :assoc-fn (fn [m k v] (update-in m [k] #(into [] (conj % v))))
-      :validate [#(boolean %) (str "hash must be one of " (hash-selectors) "!")]]
+      :assoc-fn (fn [m k v] (update m k (fnil conj []) v))
+      :validate [some? (str "hash must be one of " (hash-selectors))]]
+     [nil "--find-by-hash <algo:hex>"
+      "find every file whose hash equals <hex>, e.g. sha1:da39a3ee.... Repeatable."
+      :id :find-by-hash
+      :assoc-fn (fn [m k v] (update m k (fnil conj []) v))]
+     ["-q" "--quiet"
+      "suppress all output. Exit status 0 if any match was found, 1 otherwise"]
 
-     [nil "--profile"
-      "internal developer option - enable profiling"]
+     ["-x" "--context <#>"
+      "with -g, show <#> lines of symmetric context around each match"
+      :parse-fn #(Integer/parseInt %)
+      :validate [#(<= 0 %) "must be >= 0"]]
+     ["-A" "--after <#>"
+      "with -g, show <#> lines of context after each match"
+      :id :after
+      :parse-fn #(Integer/parseInt %)
+      :validate [#(<= 0 %) "must be >= 0"]]
+     ["-B" "--before <#>"
+      "with -g, show <#> lines of context before each match"
+      :id :before
+      :parse-fn #(Integer/parseInt %)
+      :validate [#(<= 0 %) "must be >= 0"]]
+     ["-G" "--glob <pattern>"
+      "match against file name as a glob (e.g. '*.clj') instead of regex (-n)"]
+     [nil "--output <fmt>"
+      "output format: text (default) or json"
+      :id :output
+      :default :text
+      :parse-fn keyword
+      :validate [#{:text :json} "must be 'text' or 'json'"]]
+     ["-o" "--out-file <path>"
+      "with -c, append output to file instead of stdout"
+      :parse-fn jio/as-file]
+     ["-m" "--monochrome"
+      "disable ANSI coloring of matches (NO_COLOR env var also honored)"]
 
-     [nil "--examples"
-      "print out usage examples"]
-     ;["-n"
-     ; "--no-color"
-     ; "turn off ansi coloring of matches"]
+     [nil "--all"
+      "traverse every directory. By default findjar skips .git, .svn, .hg, node_modules, target, build, .gradle, .cpcache, .idea, .vscode, plus any paths matched by .gitignore at each search-root."]
+     ["-L" "--follow"
+      "follow symbolic links (default: don't follow)"]
+     [nil "--max-depth <n>"
+      "do not descend more than <n> directory levels below each search-root"
+      :id :max-depth
+      :parse-fn #(Integer/parseInt %)
+      :validate [#(<= 0 %) "must be >= 0"]]
+     [nil "--exclude <name>"
+      "skip directories with this name (repeatable). Adds to the default exclude list."
+      :id :exclude
+      :assoc-fn (fn [m k v] (update m k (fnil conj #{}) v))]
+     [nil "--no-gitignore"
+      "do not honor .gitignore files in search-roots"
+      :id :no-gitignore]
+     [nil "--text"
+      "with -g, do not skip files that look binary (NUL bytes in first 8KB)"
+      :id :text]
+     [nil "--no-parallel"
+      "scan files serially (default is parallel using ~ cores+2 workers)"
+      :id :no-parallel]
+     [nil "--parallel-jobs <n>"
+      "cap the number of concurrent scan workers. Useful on HDD or networked filesystems."
+      :id :parallel-jobs
+      :parse-fn #(Integer/parseInt %)
+      :validate [pos? "must be a positive integer"]]
+     [nil "--nested"
+      "recurse into jars/zips that appear as entries inside other jars/zips. Path takes the form outer.jar@inner.jar@entry."
+      :id :nested]
 
-     ;["-m" "--md5" "print md5 hash of matched files"]
-     ;["-s" "--sha1" "print sha1 hash of matched files"]
-     ["-h"
-      "--help"
-      "show usage information"]]))
+     [nil "--examples"  "print usage examples and exit"]
+     [nil "--profile"   "enable tufte profiling (developer)"]
+     ["-V" "--version"  "print version and exit"]
+     ["-h" "--help"     "show this help and exit"]]))
 
-(def usage-text
-  [""
-   "findjar - a tool for searching through files, including files inside jars"
-   ""
-   "usage: findjar <search-root> [-p <path-pattern>] [-g <content-pattern>]  [...]"
-   ""
-   "findjar searches for files/content in any disk structure. It is capable of
-   looking both for/in normal files and also for/in files inside
-    zip/jar files. It is capable of regex matching both for file name/path
-    and for content within the files."
-   ""
-   "This tool is in essence an improvement of the unix find command
-    geared towards solving a common problem for programmers on the JVM:
-    finding that specific file or class in your maven repo, classpath, etc
-    when that file can reside either directly on disk or inside a jar archive."
-   ""
-   "Also this tool can be useful in detecting what version a specific class file"
-   "or source file inside a library jar changed between a number of versions of"
-   "the library file."
-   ""
-   "Note that this tool is capable of a few extra tricks such as writing
-    out the contents of matched files inside jar files and calculating
-    md5 or sha1 hashes of matched files inside jar files."
-   ""
-   "For regular files the path pattern (-p) matches against the entire path,"
-   "including the file name, i.e.:"
-   ""
-   "   ~> findjar ~/.m2 -p '.*asm/asm/3.2.*pom'"
-   ""
-   "   repository/asm/asm/3.2/asm-3.2.pom"
-   ""
-   "whereas for files within jar files, the path pattern matches the string:"
-   ""
-   "   <path-to-jar-file>@<path-within-jar-file>"
-   ""
-   "i.e:"
-   ""
-   "   ~> findjar ~/.m2 -p '.*asm/asm.*Edge.class'"
-   ""
-   "   repository/asm/asm/3.2/asm-3.2.jar@org/objectweb/asm/Edge.class"
-   ""
-   "Command line switches can be provided either using short form i.e. '-t j'
-    or long form i.e. '--type j'."
-   ""
-   "For usage examples:"
-   ""
-   "   ~> findjar --examples"
-   ""
-   "Author: Matias Bjarland / mbjarland@gmail.com"
-   ""
-   ""
-   (str "findjar " (version-string))
-   ""
-   "Options:"])
+;; Option groups for the help summary. Each group is rendered with its own
+;; heading; ids must match the auto-derived ids in cli-options above.
+
+(def option-groups
+  [["Filtering"  [:name :path :apath :glob :grep :flags :types]]
+   ["Action"     [:cat :files-only :hash :find-by-hash :quiet]]
+   ["Output"     [:context :after :before :output :out-file :monochrome]]
+   ["Scanning"   [:all :follow :max-depth :exclude :no-gitignore :text
+                  :no-parallel :parallel-jobs :nested]]
+   ["Misc"       [:examples :profile :version :help]]])
+
+(defn- load-resource
+  "Slurp a packaged text resource. Used for help / examples text so cli.clj
+  stays small and non-coders can edit them directly."
+  [path]
+  (or (some-> (jio/resource path) slurp)
+      ;; Fallback for repl runs from the project root (no uberjar yet).
+      (let [f (jio/file "resources" path)]
+        (when (.exists f) (slurp f)))
+      ""))
+
+(defn- summarize-group
+  "Render one option group: heading + a column-aligned block of its options."
+  [global-lens header parts-by-id ids]
+  (let [parts (keep parts-by-id ids)]
+    (when (seq parts)
+      (str/join "\n"
+                (cons (str header ":")
+                      (cli/format-lines global-lens parts))))))
+
+(defn summarize
+  "Render the option summary, grouped per option-groups. Column widths are
+  computed across all options so groups stay aligned with each other."
+  [specs]
+  (if (seq specs)
+    (let [parts        (mapv (partial cli/make-summary-part false) specs)
+          lens         (apply map (fn [& cols] (apply max (map count cols))) parts)
+          parts-by-id  (zipmap (map :id specs) parts)]
+      (->> option-groups
+           (keep (fn [[header ids]] (summarize-group lens header parts-by-id ids)))
+           (str/join "\n\n")))
+    ""))
 
 (defn usage [summary]
-  (let [append-summary #(str % "\n" summary "\n")]
-    (->> usage-text
-         (map un-whitespace)
-         (map #(wrap-line max-width %))
-         (str/join \newline)
-         (append-summary))))
+  (str (load-resource "findjar/usage.txt")
+       "\n"
+       summary
+       "\n\n"
+       "findjar " (version-string)
+       "\n"))
 
+
+(defn- no-color-env? []
+  (let [v (System/getenv "NO_COLOR")]
+    (and (some? v) (not= "" v))))
 
 (defn colorize
-  "renders a line of text, optionally using ansi colors if :monochrome is unset in
-  the first argument opts"
-  [{:keys [monochrome] :as opts} line]
+  "Render a line of text, optionally using ANSI colors. Disabled when
+  --monochrome is set or NO_COLOR is in the environment."
+  [{:keys [monochrome]} line]
   (let [old-value (Ansi/isEnabled)
-        _         (Ansi/setEnabled (if monochrome false true))
-        line      (ansi/render line)]
-    (Ansi/setEnabled old-value)
-    line))
-
-(def examples-text
-  [""
-   "Examples:"
-   ""
-   "(some paths etc have been omitted/abbreviated for brevity)"
-   ""
-   "  1. list all files in maven cache (~/.m2), both directly on disk and "
-   "     within jar files:"
-   ""
-   "     @|bold ~> findjar ~/.m2|@"
-   ""
-   "     .../1.6.1/nightlight-1.6.1.pom"
-   "     .../1.6.1/nightlight-1.6.1.jar.sha1"
-   "     .../1.6.1/nightlight-1.6.1.jar@META-INF/.../nightlight/pom.properties"
-   "     ..."
-   ""
-   "  2. list all files where file name (-n) matches pattern, both directly on disk"
-   "     and within jar files:"
-   ""
-   "     @|bold ~> findjar ~/.m2 -n \"string.clj\"|@"
-   ""
-   "     .../clojure-1.9.0.jar@clojure/string.clj"
-   "     .../clojure-1.7.0.jar@clojure/string.clj"
-   "     .../clojure-1.8.0.jar@clojure/string.clj"
-   "     ...octet-1.1.0.jar@octet/spec/string.cljc"
-   "     ..."
-   ""
-   "  3. list all files where both file name (-n) and a line in the file "
-   "     content (-g) matches pattern. Print out matching lines with line "
-   "     numbers, highlight intra-line content matches. Search only files "
-   "     within jar files (-t) (ignore normal, directly on disk files):"
-   ""
-   "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -g \"author.*Rich Hickey\" -t j|@"
-   ""
-   "     .../clojure-1.9.0.jar@clojure/set.clj:10       :@|red author \"Rich Hickey|@\"}"
-   "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :@|red author \"Rich Hickey|@\"}"
-   "     .../clojure-1.9.0.jar@clojure/inspector.clj:10  :@|red author \"Rich Hickey|@\"}"
-   "     .../clojure-1.9.0.jar@clojure/xml.clj:10       :@|red author \"Rich Hickey|@\"}"
-   "     ..."
-   ""
-   "    (with the matched string highlighted)"
-   ""
-   "  4. same as above, but include one surrounding line of \"context\" (-x)"
-   "     when printing the matching lines:"
-   ""
-   "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -g \"Rich Hickey\" -t j -x 1|@"
-   ""
-   "     .../clojure-1.9.0.jar@clojure/set.clj 9  (ns ^{:doc \"Set operations..."
-   "     .../clojure-1.9.0.jar@clojure/set.clj:10        :@|red author \"Rich Hickey|@\"}"
-   "     .../clojure-1.9.0.jar@clojure/set.clj 11        clojure.set)"
-   "     .../clojure-1.9.0.jar@clojure/zip.clj 13   and enumeration.  See Huet"
-   "     .../clojure-1.9.0.jar@clojure/zip.clj:14        :@|red author \"Rich Hickey|@\"}"
-   "     .../clojure-1.9.0.jar@clojure/zip.clj 15   clojure.zip"
-   "     ..."
-   ""
-   "    (with the matched string highlighted)"
-   ""
-   "  5. find all files where name (-n) matches pattern and dump (-c) them on"
-   "     stdout, search both directly on disk and within jar files:"
-   ""
-   "     @|bold ~> findjar clojure/1.9.0 -n \"MANIFEST.MF\" -c|@"
-   ""
-   "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/MANIFEST.MF"
-   "     @|green 1|@ Manifest-Version: 1.0"
-   "     @|green 2|@ Archiver-Version: Plexus Archiver"
-   "     @|green 3|@ Created-By: Apache Maven"
-   "     @|green 4|@ Built-By: jenkins"
-   "     @|green 5|@ Build-Jdk: 1.7.0"
-   "     @|green 6|@ Main-Class: clojure.main"
-   "     @|green 7|@"
-   "     @|red >>>>>>>|@"
-   ""
-   "  6. find all files where content (-g) matches pattern and dump (-c) them "
-   "     on stdout, intra-line highlight the matching content lines, search "
-   "     both directly on disk and within jar files:"
-   ""
-   "     @|bold ~> findjar clojure/1.9.0 -g \"Plexus\" -c|@"
-   ""
-   "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/MANIFEST.MF"
-   "     @|green 1|@ Manifest-Version: 1.0"
-   "     @|green 2|@ Archiver-Version: @|red Plexus|@ Archiver"
-   "     @|green 3|@ Created-By: Apache Maven"
-   "     @|green 4|@ Built-By: jenkins"
-   "     @|green 5|@ Build-Jdk: 1.7.0"
-   "     @|green 6|@ Main-Class: clojure.main"
-   "     @|green 7|@"
-   "     @|red >>>>>>>|@"
-   ""
-   "    (with the word \"Plexus\" on line 2 highlighted)"
-   ""
-   "  7. find all files where both file name (-n) and content (-g) matches pattern"
-   "     and dump them on stdout:"
-   ""
-   "     @|bold ~> findjar clojure/1.9.0 -n \"properties\" -g \"groupId\" -c|@"
-   ""
-   "     @|red <<<<<<<|@ clojure-1.9.0.jar@META-INF/...clojure/pom.properties"
-   "     @|green 1|@ #Generated by Maven"
-   "     @|green 2|@ #Fri Dec 08 08:01:54 CST 2017"
-   "     @|green 3|@ version=1.9.0"
-   "     @|green 4|@ @|green groupId|@=org.clojure"
-   "     @|green 5|@ artifactId=clojure"
-   "     @|red >>>>>>>|@"
-   ""
-   "    (with the word \"groupId\" on line 4 highlighted)"
-   ""
-   "  8. find all files where name (-n) matches pattern and calculate "
-   "     sha1 and md5 hash (-s) for them:"
-   ""
-   "     @|bold ~> findjar clojure/1.9.0 -n \"clj\" -s sha1 -s md5|@"
-   ""
-   "     ...94a86681b58d556f1eb13a clojure-1.9.0.jar@clojure/string.clj"
-   "     ...f05f65fa44628a95497032 clojure-1.9.0.jar@clojure/set.clj"
-   "     ...7444756fa91b65 clojure-1.9.0.jar@clojure/string.clj"
-   "     ...95aaa8c6e9af74 clojure-1.9.0.jar@clojure/set.clj"
-   ""])
+        on?       (and (not monochrome) (not (no-color-env?)))]
+    (try
+      (Ansi/setEnabled on?)
+      (ansi/render line)
+      (finally
+        (Ansi/setEnabled old-value)))))
 
 (defn examples
-  "return a display string with the example usages"
+  "Render the packaged examples resource, applying jansi colour markers
+  unless --monochrome / NO_COLOR disable them."
   [opts]
-  (->> examples-text
-       ;(map #(wrap-line MAX_WIDTH %) lines)
+  (->> (load-resource "findjar/examples.txt")
+       str/split-lines
        (map #(colorize opts %))
        (str/join \newline)))
 
 (defn error-msg
-  "return a display string for an error message"
-  [errors summary]
-  (str (usage summary)
-       "\n"
-       "ERROR" (when (> (count errors) 1) "S") ":\n\n"
-       (str "  " (str/join (str \newline "  ") errors) \newline)))
+  "Render a display string for one or more errors. The errors come first so
+  they're visible without scrolling; a hint follows. Full usage is one
+  --help away, no need to dump it on every typo."
+  [errors _summary]
+  (str "findjar: error" (when (< 1 (count errors)) "s") ":\n"
+       (str/join \newline (map #(str "  " %) errors))
+       "\n\nTry 'findjar --help' for more information.\n"))
 
-(defn summarize
-  "Reduce options specs into an options summary for printing at a terminal.
-  Note that the specs argument should be the compiled version. That effectively
-  means that you shouldn't call summarize directly. When you call parse-opts
-  you get back a :summary key which is the result of calling summarize (or
-  your user-supplied :summary-fn option) on the compiled option specs."
-  [specs]
-  (if (seq specs)
-    (let [show-defaults? false                                   ;(some #(and (:required %) (contains? % :default)) specs)
-          parts          (map (partial cli/make-summary-part show-defaults?) specs)
-          lens           (apply map (fn [& cols] (apply max (map count cols))) parts)
-          lines          (cli/format-lines lens parts)]
-      (str/join \newline lines))
-    ""))
 
 
 (defn english-list [args]
@@ -437,71 +316,103 @@
     (let [xs (interpose ", " args)]
       (apply str (concat (butlast xs) ["and " (last xs)])))))
 
+(defn- parse-find-by-hash
+  "Parse --find-by-hash values like 'sha1:da39a3ee...'. Returns a map
+  {:algo :sha1 :hex \"da39a3ee...\"} or :error with a reason."
+  [s]
+  (if-let [[_ algo-str hex] (re-matches #"([^:]+):([0-9a-fA-F]+)" s)]
+    (if-let [algo (c/hash-by-desc algo-str)]
+      {:algo algo :hex (str/lower-case hex)}
+      {:error (str "unknown algorithm '" algo-str "' in --find-by-hash; "
+                   "must be one of " (str/join ", "
+                                                (map :desc (vals c/hash-algorithms))))})
+    {:error (str "--find-by-hash must be of the form <algo>:<hex>, got '" s "'")}))
+
+(defn- compile-glob ^java.util.regex.Pattern [^String pat]
+  ;; Translate a simple shell-style glob into a regex that matches the whole
+  ;; file name. Supports * (anything-except-/), ? (any single char), and
+  ;; [abc] character classes; everything else is escaped literally. This is
+  ;; intentionally minimal — no extglob, no globstar, no brace expansion.
+  (let [sb (StringBuilder. "^")]
+    (loop [i 0]
+      (when (< i (count pat))
+        (let [c (.charAt pat i)]
+          (case c
+            \* (.append sb "[^/]*")
+            \? (.append sb "[^/]")
+            \. (.append sb "\\.")
+            \\ (.append sb "\\\\")
+            \( (.append sb "\\(")
+            \) (.append sb "\\)")
+            \+ (.append sb "\\+")
+            \^ (.append sb "\\^")
+            \$ (.append sb "\\$")
+            \{ (.append sb "\\{")
+            \} (.append sb "\\}")
+            \| (.append sb "\\|")
+            (.append sb c))
+          (recur (inc i)))))
+    (.append sb "$")
+    (java.util.regex.Pattern/compile (.toString sb))))
+
 (defn validate-args
-  "Parse and validate command line arguments and execute accordingly."
+  "Parse and validate command line arguments."
   [args]
-  (let [parsed      (cli/parse-opts args (cli-options)
-                                    :strict true
-                                    :summary-fn summarize)
+  (let [parsed (cli/parse-opts args (cli-options)
+                               :strict true
+                               :summary-fn summarize)
         {:keys [options arguments errors summary]} parsed
-        fail        (fn [msg] {:exit-message (error-msg [msg] summary)})
-        search-root (jio/file (first arguments))]
+        fail   (fn [msg] {:exit-message (error-msg [msg] summary)})
+        ;; Promote --no-parallel into a positive :parallel boolean and merge
+        ;; -G glob into the :name regex slot (failing if both are given).
+        glob   (:glob options)
+        glob-pat (when glob (compile-glob glob))
+        fbh-raw  (:find-by-hash options)
+        fbh-parsed (when fbh-raw (mapv parse-find-by-hash fbh-raw))
+        fbh-err  (some :error fbh-parsed)
+        opts   (cond-> options
+                 true             (assoc :parallel (not (:no-parallel options)))
+                 true             (dissoc :no-parallel)
+                 glob-pat         (assoc :name glob-pat)
+                 fbh-parsed       (assoc :find-by-hash fbh-parsed))
+        ;; No positional => search current directory.
+        roots-strs   (if (empty? arguments) ["."] arguments)
+        search-roots (mapv jio/file roots-strs)
+        bad-roots    (remove #(.isDirectory ^java.io.File %) search-roots)]
     (cond
+      (:version options)
+      {:exit-message (str "findjar " (version-string)) :ok? true}
+
       (:examples options)
-      {:exit-message (examples options) :ok? true}               ; examples => exit OK with examples
+      {:exit-message (examples options) :ok? true}
 
       (:help options)
-      {:exit-message (usage summary) :ok? true}                  ; help => exit OK with usage summary
+      {:exit-message (usage summary) :ok? true}
 
-      ;(and (:out-file options)
-      ;     (:grep options)) (fail "can not use out-file (-o) and grep (-g) together")
-
-      (and (:apath options)
-           (:path options))
+      (and (:apath options) (:path options))
       (fail "can not use path (-p) and apath (-a) together")
 
+      (and glob (:name options))
+      (fail "can not use --glob (-G) and --name (-n) together")
+
+      fbh-err
+      (fail fbh-err)
+
       errors
-      {:exit-message (error-msg errors summary)}                 ; errors => exit with description of errors
+      {:exit-message (error-msg errors summary)}
 
-      (= 0 (count arguments))
-      (fail "no search root provided")
+      (seq bad-roots)
+      (fail (str "non-directory search root"
+                 (when (< 1 (count bad-roots)) "s") ": "
+                 (english-list (mapv str bad-roots))))
 
-      (> 1 (count arguments))
-      (fail (str "multiple search-roots provided: " (english-list arguments)))
-
-      (not (.isDirectory search-root))
-      (fail (str "invalid non-directory search root: " search-root))
-
-      :else {:search-root search-root
-             :opts        options})))                            ; failed custom validation => exit with usage summary
+      :else
+      {:search-roots search-roots :opts opts})))
 
 (defn exit [status msg]
-  (println msg)
+  ;; --help / --examples (status 0) go to stdout; errors (non-zero) go to
+  ;; stderr so callers piping stdout to other tools don't see them.
+  (binding [*out* (if (zero? status) *out* *err*)]
+    (println msg))
   (System/exit status))
 
-(comment
-  ;; print opts in repl
-  (cli/parse-opts ["-h"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  ;; provide multiple hash algorithms
-  (cli/parse-opts ["-s" "sha1" "-s" "md5"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  ;; parse a real set of opts
-  (cli/parse-opts ["." "-n" ".clj" "-t" "d"]
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  (cli/parse-opts ["." "-n" ".clj" "-t" "zd"]
-
-                  (cli-options)
-                  :strict true
-                  :summary-fn summarize)
-
-  )
