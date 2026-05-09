@@ -28,6 +28,8 @@
     (.add calls [:match path opts]))
   (grep-match [_ max-line-# line-map opts]
     (.add calls [:grep-match max-line-# line-map opts]))
+  (grep-count [_ path n opts]
+    (.add calls [:grep-count path n opts]))
   (dump-stream [_ path materialized opts]
     (.add calls [:dump-stream path materialized opts]))
   (print-hash [_ path hash-type hash-value opts]
@@ -53,6 +55,7 @@
       :warn        (apply p/warn        output args)
       :match       (apply p/match       output args)
       :grep-match  (apply p/grep-match  output args)
+      :grep-count  (apply p/grep-count  output args)
       :dump-stream (apply p/dump-stream output args)
       :print-hash  (apply p/print-hash  output args))))
 

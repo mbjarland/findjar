@@ -176,6 +176,27 @@
   (is (true? (:text   (:opts (parsed "/tmp" "--text")))))
   (is (true? (:nested (:opts (parsed "/tmp" "--nested"))))))
 
+(deftest invert-match-flag
+  (is (true? (:invert (:opts (parsed "/tmp" "-v")))))
+  (is (true? (:invert (:opts (parsed "/tmp" "--invert-match"))))))
+
+(deftest word-flag-wraps-grep-with-boundaries
+  (let [{:keys [opts]} (parsed "/tmp" "-g" "foo" "-w")]
+    (testing ":word is set"
+      (is (true? (:word opts))))
+    (testing "the grep pattern is wrapped with \\b boundaries"
+      (let [^java.util.regex.Pattern p (:grep opts)]
+        (is (str/starts-with? (.pattern p) "\\b"))
+        (is (str/ends-with?   (.pattern p) "\\b"))
+        (is (re-find p "hello foo world"))
+        (is (not (re-find p "hello fooo world")))))))
+
+(deftest count-and-max-count-flags
+  (is (true? (:count (:opts (parsed "/tmp" "--count")))))
+  (is (= 5 (:max-count (:opts (parsed "/tmp" "--max-count" "5")))))
+  (is (str/includes? (:exit-message (parsed "/tmp" "--max-count" "0"))
+                     "must be a positive integer")))
+
 (deftest version-string-test
   (let [v (cli/version-string)]
     (testing "non-empty"

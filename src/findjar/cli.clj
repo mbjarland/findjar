@@ -127,6 +127,12 @@
       :parse-fn re-pattern]
      ["-g" "--grep <regex>"   "match against file content lines"
       :parse-fn re-pattern]
+     ["-w" "--word-regexp"
+      "with -g, match only at word boundaries (wraps the pattern in \\b…\\b)"
+      :id :word]
+     ["-v" "--invert-match"
+      "with -g, emit lines that do NOT match the pattern"
+      :id :invert]
      ["-f" "--flags <flags>"
       "regex flags applied to every pattern. Combine any of: i (case-insensitive), m (multiline), s (dotall), u (unicode-case), x (comments), d (unix-lines)."
       :validate [#(empty? (c/unknown-flag-chars %))
@@ -143,6 +149,14 @@
       "print the entire contents of matching files (with line numbers)"]
      ["-l" "--files-only"
       "with -g, print one path per matching file instead of every matching line"]
+     [nil "--count"
+      "with -g, print only the count of matching lines per file ('<path>:<n>')"
+      :id :count]
+     [nil "--max-count <n>"
+      "with -g, stop after <n> matching lines per file"
+      :id :max-count
+      :parse-fn #(Integer/parseInt %)
+      :validate [pos? "must be a positive integer"]]
      ["-s" "--hash <algo>"
       (str "print file hash. Output format: '<hex> <algo> <path>'. Algorithms: "
            (hash-selectors) ". Repeat -s to print several.")
@@ -224,8 +238,9 @@
 ;; heading; ids must match the auto-derived ids in cli-options above.
 
 (def option-groups
-  [["Filtering"  [:name :path :apath :glob :grep :flags :types]]
-   ["Action"     [:cat :files-only :hash :find-by-hash :quiet]]
+  [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :types]]
+   ["Action"     [:cat :files-only :count :max-count :hash :find-by-hash
+                  :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome]]
    ["Scanning"   [:all :follow :max-depth :exclude :no-gitignore :text
                   :no-parallel :parallel-jobs :nested]]
@@ -374,7 +389,13 @@
                  true             (assoc :parallel (not (:no-parallel options)))
                  true             (dissoc :no-parallel)
                  glob-pat         (assoc :name glob-pat)
-                 fbh-parsed       (assoc :find-by-hash fbh-parsed))
+                 fbh-parsed       (assoc :find-by-hash fbh-parsed)
+                 ;; -w wraps the grep pattern with \b boundaries. Done
+                 ;; before -f flags are applied (in core/munge-regexes), so
+                 ;; the wrapped form picks up the user's flags too.
+                 (and (:word options) (:grep options))
+                 (update :grep (fn [^java.util.regex.Pattern p]
+                                 (re-pattern (str "\\b(?:" (.pattern p) ")\\b")))))
         ;; No positional => search current directory.
         roots-strs   (if (empty? arguments) ["."] arguments)
         search-roots (mapv jio/file roots-strs)

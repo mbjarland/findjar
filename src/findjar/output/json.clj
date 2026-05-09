@@ -66,6 +66,8 @@
                            :text   line}
                     (seq match-idxs)
                     (assoc :matches (mapv (juxt :start :end) match-idxs)))))
+    (grep-count [_ path n _opts]
+      (emit-line! {:kind "count" :path path :count n}))
     (dump-stream [_ path materialized _opts]
       (emit-line! {:kind "cat" :path path :content materialized}))
     (print-hash [_ path hash-type hash-value _opts]

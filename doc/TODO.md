@@ -1,0 +1,111 @@
+# findjar — Roadmap / TODO
+
+Consolidated list of follow-up ideas captured across the recent reviews.
+Items are tiered by ROI; pick from any tier independently.
+
+---
+
+## Tier 1 — Distribution (biggest UX leap)
+
+The tool is feature-complete for its niche; the next-biggest improvement
+is making it **instant to start** and **one command to install**.
+
+- [ ] **GraalVM native-image build.** Drops cold start from ~150ms (JVM
+      warm-up) to ~10ms — meaningful when `findjar -q` is in a shell-script
+      hot loop. Recommended Graal: Oracle GraalVM 25 LTS
+      (`25.0.3-graal` via SDKMAN).  Caveats: jansi needs reflection
+      config (project ships one), resources need `-H:IncludeResources`,
+      `:gen-class -main` is already the right entrypoint shape.
+- [ ] **Homebrew formula** in a `homebrew-findjar` tap repo:
+      `brew install mbjarland/findjar/findjar`. ~30 lines of Ruby.
+      Pairs naturally with the native-image binary.
+- [ ] **GitHub Actions release pipeline.** Tag push → matrix builds
+      uberjar + native binaries for `linux-x64`, `macos-arm64`, `macos-x64`,
+      `windows-x64`, attaches to the GH Release. Pattern is well-known
+      (used by babashka, clj-kondo). ~50 lines of YAML.
+- [ ] **Bash / zsh / fish completions** in `completions/` directory,
+      installed by Homebrew. ~50 lines per shell.
+
+## Tier 2 — Common grep flags users will reach for
+
+High-frequency, small additions, no risk:
+
+- [x] **`-v` / `--invert-match`** — print non-matching lines.
+- [x] **`-w` / `--word-regexp`** — match only at word boundaries.
+- [x] **`--count`** — number of matches per file.
+- [x] **`--max-count <n>`** — stop after N matches per file.
+
+## Tier 3 — Functional expansions
+
+Bigger lifts but high payoff for findjar's "JVM tooling" niche:
+
+- [ ] **Tar / tar.gz / tar.xz support.** New entry in `file-finders`,
+      same plumbing as jar/zip. Use `commons-compress` (small dep) or
+      hand-roll a tar reader (~150 lines pure Clojure).
+- [ ] **MANIFEST.MF / pom.properties auto-extract.**
+      `findjar app.jar --manifest` outputs `Main-Class:`, `Bundle-Version:`,
+      etc. without needing `-c`. Tiny convenience, oddly satisfying.
+- [ ] **Class-file aware mode.** `--class-info` parses `.class` entries
+      via ASM and emits class name, super, interfaces, methods. Real
+      JVM-tooling territory — would make findjar a serious replacement
+      for `jar -tf | grep` + `javap`.
+- [ ] **`.gitignore` recursion.** Today only the search-root .gitignore
+      is read. Real git reads at every directory level with cascading
+      rules. Useful for monorepos. Bigger lift but the "right" behavior.
+- [ ] **`.gitignore` negation (`!pattern`).** Currently skipped; would
+      need "last-match-wins" tracking.
+
+## Tier 4 — Polish
+
+- [ ] **`--unordered` for parallel scan.** Today parallel-scan replays
+      in input order so output is deterministic, but huge scans block
+      until earlier files complete. `--unordered` would let workers emit
+      ASAP. Useful for `findjar ~/.m2 -g foo --unordered | head`.
+- [ ] **Recipe / cookbook doc.** A `doc/RECIPES.md` with worked
+      solutions: "find every jar that depends on log4j", "spot duplicate
+      classes across uberjars", "license audit", "compare two clojure
+      versions". Adoption + SEO win.
+- [ ] **Performance benchmark suite.** `criterium` against a fixed
+      fixture; CI tracks regressions per commit. Cheap insurance.
+- [ ] **Property tests.** Generative tests for `walk-tree`,
+      `gitignore-line->regex`, `match-idxs`, `compile-glob`. Catches
+      edge cases the integration suite misses.
+- [ ] **Color customization** via env var
+      (`FINDJAR_COLORS=match=cyan,path=blue`). Niche.
+
+## Tier 5 — Lower priority / niche
+
+- [ ] **`--max-time <sec>`** — bail out after N seconds.
+- [ ] **`--max-results <n>`** — stop after N total matches across all files.
+- [ ] **Compressed-file search** — gzipped log files (`.gz`/`.bz2`/`.xz`).
+- [ ] **`-r` / `--recursive` / `--no-recursive`** — explicit depth-0 mode.
+      Today always recursive (with `--max-depth 0` as the workaround).
+- [ ] **`--path-style relative|absolute|root-relative`** — explicit
+      replacement for the inferred `-a` / `--include-root?` logic.
+- [ ] **Watch mode** (`--watch`) — re-run on filesystem changes. Niche.
+- [ ] **Better Windows support** — file paths use `/` in archive entries
+      but `\` on Windows disk. Probably mostly works but edge cases.
+- [ ] **Memory-mapped jar reading** for huge jars. ZipFile already
+      uses random access; might be a no-op.
+
+## Tier 6 — Done (recent)
+
+For reference of what we already shipped on `feature/cleanup-and-parallelize`
+(now merged to master):
+
+- Architecture: protocol → registry refactor, render extraction, buffering
+  output, parallel-scan, byte-for-byte master parity.
+- Bug fixes: warn-no-throw, name-part, file-ext, multi-search-root, build
+  timestamp, hash.read-is, *out* flush, stack-overflow concat, OOM render-cat.
+- CLI: default cwd, multiple roots, `-l`, `--all`, `-q`, `-V`, `-L`,
+  `-A`/`-B`, `-G`, `--max-depth`, `--exclude`, `--no-gitignore`, `--text`,
+  `--nested`, `--find-by-hash`, `--output json`, `--parallel-jobs`,
+  `--no-parallel`, `NO_COLOR` env.
+- Defaults: skip `.git`/`node_modules`/`target`/`build`/`.gradle`/`.cpcache`/
+  `.idea`/`.vscode`/`.svn`/`.hg`, honor `.gitignore`, don't follow
+  symlinks, skip binary files when grepping, hash output labels algorithm,
+  errors to stderr.
+- Help: grouped sections, accurate usage line, errors lead with the
+  message not the help wall.
+- Docs: README rewrite, CHANGELOG, man page, CLAUDE.md.
+- Tests: 86 tests, 225 assertions, fixture-based integration suite.

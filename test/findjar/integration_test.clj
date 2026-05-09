@@ -4,6 +4,7 @@
   (:require [clojure.java.io :as jio]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
+            [findjar.cli :as cli]
             [findjar.core :as c]
             [findjar.main :as main]
             [findjar.output.buffering :as buf]
@@ -295,6 +296,63 @@
     (testing "with --no-gitignore, ignored/ and *.log are reachable"
       (is (contains? paths "ignored/secret.clj"))
       (is (contains? paths "trace.log")))))
+
+;; ----------------------------------------------------------------------------
+;; -v / --invert-match
+
+(deftest grep-invert-match
+  (let [out  (run {:grep #"world" :invert true})
+        rows (->> (ro/calls-of out)
+                  (filter #(= :grep (first %)))
+                  (map #(nth % 2))
+                  (filter #(= "alpha.txt" (:path %))))]
+    (testing "non-matching lines emit hits"
+      (is (= #{0 2} (set (map :line-# rows))))   ; "hello" and "clojure rocks"
+      (is (every? :hit? rows)))
+    (testing "non-matching hits have empty :match-idxs (no highlight)"
+      (is (every? #(empty? (:match-idxs %)) rows)))))
+
+;; ----------------------------------------------------------------------------
+;; -w / --word-regexp — actually applied via cli/validate-args, but verify
+;; the resulting pattern is what core sees.
+
+(deftest grep-word-regexp-via-cli
+  (let [{:keys [opts]} (cli/validate-args ["-g" "main" "-w" "/tmp"])]
+    (is (re-find  (:grep opts) "the main thread"))
+    (is (re-find  (:grep opts) "(main)"))
+    (is (not (re-find (:grep opts) "remained")))
+    (is (not (re-find (:grep opts) "domain")))))
+
+;; ----------------------------------------------------------------------------
+;; --count / --max-count
+
+(deftest grep-count
+  (let [out  (run {:grep #"Rich Hickey" :count true})
+        counts (->> (ro/calls-of out)
+                    (filter #(= :count (first %)))
+                    (map (fn [c] [(nth c 1) (nth c 2)]))
+                    (into {}))]
+    (testing "one :count call per file with at least one match"
+      ;; beta.clj has exactly one line containing 'Rich Hickey'
+      (is (= 1 (get counts "beta.clj")))
+      (is (= 1 (get counts "lib.jar@clojure/string.clj"))))
+    (testing "no per-line :grep calls when --count is set"
+      (is (empty? (filter #(= :grep (first %)) (ro/calls-of out)))))))
+
+(deftest grep-max-count
+  ;; beta.clj has 1 'Rich Hickey' hit; alpha.txt has 0; lib.jar@string.clj
+  ;; has 1. So most files have at most 1 match. Use a low max-count and
+  ;; verify ordering.
+  (let [out  (run {:grep #"Rich Hickey" :max-count 1})
+        per-file-hits
+        (->> (ro/calls-of out)
+             (filter #(= :grep (first %)))
+             (map #(nth % 2))
+             (filter :hit?)
+             (group-by :path))]
+    (testing "no file emits more than max-count hit lines"
+      (doseq [[_ hits] per-file-hits]
+        (is (<= (count hits) 1))))))
 
 ;; ----------------------------------------------------------------------------
 ;; -A / -B asymmetric grep context

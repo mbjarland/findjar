@@ -102,9 +102,10 @@
 ;;;; Grep — sliding-window context
 
 (defn- window->matching-lines
-  "Build the line-maps for a single hit at match-line-#. before/after specify
-  the asymmetric context width. center-idx points at the hit within `lines`."
-  [path match-line-# before lines center-idx match-idxs]
+  "Build the line-maps for a single hit at match-line-#. before specifies
+  how many context lines precede the hit within `lines`. match-idxs may be
+  empty (e.g. for --invert-match where there are no chunks to highlight)."
+  [path match-line-# before lines match-idxs]
   (keep
     (fn [[cn line]]
       (when line
@@ -121,48 +122,86 @@
           (or (first (filter :hit? group)) (first group)))
         (vals (group-by :line-# matches))))
 
-(defn- find-line-maps-with-context [sliding before pattern path]
-  (reduce
-    (fn [a [window-# lines]]
-      (let [idxs (match-idxs pattern (nth lines before))]
-        (if (seq idxs)
-          (into a (window->matching-lines path window-# before lines before idxs))
-          a)))
-    []
-    (map-indexed vector sliding)))
+(defn- line-match-fn
+  "Decide whether a center line is a hit and (for highlighting) which
+  ranges within it to colour. Returns nil for non-hits, a (possibly empty)
+  vector of {:start :end} for hits. Empty means hit-but-no-highlight, used
+  by --invert-match where there are no matched chunks to colour."
+  [pattern invert?]
+  (if invert?
+    (fn [^String s] (when (and s (not (re-find pattern s))) []))
+    (fn [^String s] (when s (let [m (match-idxs pattern s)] (when (seq m) m))))))
+
+(defn- find-line-maps-with-context
+  "Walk the sliding-window view of the file. Emits hit + context line-maps
+  for the first --max-count hits (or all if not set)."
+  [sliding before pattern path opts]
+  (let [match? (line-match-fn pattern (:invert opts))
+        max-n  (:max-count opts)]
+    (loop [items (map-indexed vector sliding)
+           hits  0
+           acc   []]
+      (cond
+        (empty? items)                acc
+        (and max-n (= hits max-n))    acc
+        :else
+        (let [[w-num lines] (first items)
+              idxs (match? (nth lines before))]
+          (if (nil? idxs)
+            (recur (rest items) hits acc)
+            (recur (rest items)
+                   (inc hits)
+                   (into acc (window->matching-lines path w-num before lines idxs)))))))))
 
 (defn- effective-context
   "Resolve -A/-B/-x into [before after]. Explicit -A or -B win; if only -x
-  is given, both before and after default to it."
+  is given, both before and after default to it. With --count, context is
+  meaningless (we emit only a number) so we collapse to zero."
   [opts]
-  (let [x (or (:context opts) 0)
-        a (:after opts)
-        b (:before opts)]
-    [(or b x) (or a x)]))
+  (if (:count opts)
+    [0 0]
+    (let [x (or (:context opts) 0)
+          a (:after opts)
+          b (:before opts)]
+      [(or b x) (or a x)])))
 
 (defn grep-stream
   "Read file-content via stream-factory, slide a (1+before+after) window
-  over its lines, emit p/grep-match for every matching line + context."
+  over its lines, emit per-line p/grep-match calls (or a single
+  p/grep-count if --count is set)."
   [output path stream-factory opts]
   (with-reader output opts stream-factory
     (fn [reader]
       (let [pattern         (:grep opts)
+            count?          (:count opts)
             [before after]  (effective-context opts)
             window          (+ 1 before after)
             head-pad        (repeat before nil)
             tail-pad        (repeat after  nil)
             sliding         (partition window 1
                                        (concat head-pad (line-seq reader) tail-pad))
-            line-maps       (find-line-maps-with-context sliding before pattern path)]
-        (when (seq line-maps)
+            line-maps       (find-line-maps-with-context sliding before pattern path opts)]
+        (cond
+          count?
+          (let [n (count (filter :hit? line-maps))]
+            (when (pos? n)
+              (p/grep-count output path n opts)))
+
+          (seq line-maps)
           (let [uniques    (dedupe-line-maps line-maps)
                 max-line-# (reduce max (map :line-# uniques))]
             (doseq [line-map (sort-by :line-# uniques)]
               (p/grep-match output max-line-# line-map opts))))))))
 
-(defn- stream-line-matches? [output opts stream-factory pattern]
-  (with-reader output opts stream-factory
-    (fn [reader] (some #(re-find pattern %) (line-seq reader)))))
+(defn- stream-line-matches?
+  "Cheap-exit any-line check used by the -l / macro-op gates. Honors
+  --invert-match: with -v, returns true if any line does NOT match."
+  [output opts stream-factory pattern]
+  (let [hit? (if (:invert opts)
+               (fn [s] (not (re-find pattern s)))
+               (fn [s] (re-find pattern s)))]
+    (with-reader output opts stream-factory
+      (fn [reader] (some hit? (line-seq reader))))))
 
 (defn binary-stream?
   "Return true if the first 8KB of the stream contains a NUL byte. Mirrors

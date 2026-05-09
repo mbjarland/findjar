@@ -36,6 +36,9 @@
       (binding [r/*use-colors* (r/use-colors? opts)]
         (println (r/format-grep-line max-line-# line-map opts))))
 
+    (grep-count [_ path n _opts]
+      (println (str path ":" n)))
+
     (dump-stream [_ path materialized opts]
       (when materialized
         (if-let [^File of (:out-file opts)]
@@ -63,6 +66,7 @@
         (warn        [_ _ _ _]   nil)
         (match       [_ _ _]     (reset! matched? true))
         (grep-match  [_ _ _ _]   (reset! matched? true))
+        (grep-count  [_ _ _ _]   (reset! matched? true))
         (dump-stream [_ _ _ _]   (reset! matched? true))
         (print-hash  [_ _ _ _ _] (reset! matched? true)))
       {::matched? matched?})))

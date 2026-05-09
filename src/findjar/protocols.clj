@@ -18,6 +18,9 @@
        }
      max-line-# is the largest :line-# in this file's match set, used for
      padding column widths.")
+  (grep-count [this path n opts]
+    "Called for --count. n is the number of matching lines in the file.
+     Suppresses any grep-match calls for the same file.")
   (dump-stream [this path materialized opts]
     "Called for -c (cat). materialized is the already-rendered string
      (including ANSI / line-number formatting) ready to be emitted. The
