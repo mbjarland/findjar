@@ -29,38 +29,44 @@ no `project.clj`/Leiningen config. Java 11/17/21 are supported (CI matrix).
 
 ## Architecture
 
-Six namespaces under `src/findjar/` (+ `output/`). Side effects are pushed
+Seven namespaces under `src/findjar/` (+ `output/`). Side effects are pushed
 to the edges via the `FindJarOutput` protocol, so the core scanning logic
 is pure-ish and pluggable.
 
 - `findjar.protocols` — defines `FindJarOutput` (sink for `warn`, `match`,
   `grep-match`, `dump-stream`, `print-hash`). All side effects flow
   through this protocol.
-- `findjar.core` — the scanner. `perform-scan` walks `file-seq`, applies
+- `findjar.core` — the scanner. `perform-scan` walks the filesystem via
+  the custom `walk-tree` (which handles `--max-depth`, `--exclude`,
+  default-excluded-dirs, `--follow`/symlinks, and `.gitignore`), applies
   the file-type filter, dispatches to the registered finder for each file,
   and runs `handle-match` which checks `--name`/`--path`/`--apath`/`--grep`
   in turn and then either reports a path match, runs `grep-stream`, hashes,
-  or hands a materialized cat string to the output sink. Sliding-window
-  context lines for grep are built in `find-line-maps-with-context` +
-  `dedupe-line-maps`. Stream lifecycles are managed by `with-stream` /
-  `with-reader` helpers (taking a 0-arg `stream-factory` fn) so the same
-  code path covers disk files and ZipEntry streams.
-- `findjar.output.buffering` — `buffering-output` records protocol calls
-  into a vector; `parallel-scan` does pmap over candidate files into
-  per-file buffers and replays them against the real output in input order.
-  Output is byte-identical to the serial path; throughput improves on
-  IO-bound scans of many archives.
-- `findjar.main` — the `-main` entry point and the default
-  `FindJarOutput` implementation (`default-output`). This is the only
-  place that prints to stdout / writes the `-o` out-file. It also owns
-  ANSI coloring (`*use-colors*` dynamic var, `style`, `highlight-matches`)
-  and cat rendering (`render-cat`), which is injected into core via a
-  function argument so core stays free of presentation concerns.
-  `-main` calls `shutdown-agents` on exit so the JVM doesn't pin open for
-  60s on the agent pool's idle threads.
-- `findjar.cli` — `tools.cli` option specs, help/usage/examples text, and
-  `validate-args`. Help text is built from the registries below so adding
-  a hash type or file type automatically updates `--help`.
+  searches by hash, or hands a materialized cat string to the output sink.
+  Sliding-window context lines for grep support asymmetric `-A`/`-B` via
+  `effective-context`. `scan-jar` opens top-level archives via `ZipFile`;
+  `scan-zip-stream` handles `--nested` recursion via `ZipInputStream` over
+  cached entry bytes (so multi-pass actions like `--cat` and
+  `--find-by-hash` work for nested entries too). Stream lifecycles are
+  managed by `with-stream` / `with-reader` helpers taking a 0-arg
+  `stream-factory` fn.
+- `findjar.output.buffering` — `Buffer` deftype + `parallel-scan` driver.
+  Workers scan into per-file buffers; recorded calls replay in input
+  order against the real output. Worker exceptions are caught and turned
+  into `:warn` calls so a single bad file doesn't kill the scan.
+- `findjar.output.json` — JSON `FindJarOutput` (one object per line) for
+  `--output json`. Hand-rolled escaper to avoid adding a dependency.
+- `findjar.render` — pure-ish rendering: ANSI coloring, intra-line match
+  highlighting, cat block formatting (two-pass streaming for exact
+  line-number padding without OOM), grep line formatting.
+- `findjar.main` — `-main` entry point and the default `FindJarOutput`
+  (`default-output`) plus `quiet-output` for `-q`. `pick-output` chooses
+  between default / json / quiet. `-main` flushes `*out*` and calls
+  `shutdown-agents` on exit (the latter prevents a 60s JVM hang on the
+  agent pool's idle threads after parallel scans).
+- `findjar.cli` — `tools.cli` option specs, grouped `--help` summary,
+  `validate-args`. Usage and examples text live in
+  `resources/findjar/{usage,examples}.txt` so non-coders can edit them.
 - `findjar.hash` — streaming hashing helpers (`MessageDigest` + `CRC32`).
 
 ### Two extension points (registries)

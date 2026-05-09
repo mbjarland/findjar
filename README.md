@@ -1,180 +1,142 @@
 # findjar
 
 [![Build Status](https://github.com/mbjarland/findjar/actions/workflows/ci.yml/badge.svg)](https://github.com/mbjarland/findjar/actions)
-[![Version](https://img.shields.io/badge/version-1.0.98-brightgreen)](https://img.shields.io/badge/version-1.0.98-brightgreen)
 [![License](https://img.shields.io/badge/License-EPL_2.0-green.svg)](https://www.eclipse.org/legal/epl-2.0/)
 
-findjar - a tool for searching through files, including files inside jars 
+`findjar` searches files on disk **and** inside jar/zip archives, with
+regex matching for file names, paths, and content. It's an improvement
+on the unix `find` command for one specific problem JVM developers hit
+constantly: locating a class or source file across a maven repo /
+classpath when it might live either directly on disk or inside a jar
+(or, with `--nested`, inside a jar inside another jar — Spring Boot
+fatjars, Bazel/Pants uberjars, shaded clients).
 
 ![alt text](https://raw.githubusercontent.com/mbjarland/findjar/master/doc/findjar_manifest_jdk_created_by.png)
 
-findjar searches for files/content in any disk structure. It is capable of looking both for/in normal files and also for/in files inside zip/jar files. It is capable of regex matching both for file name/path and for content within the files. 
- 
-This tool is in essence an improvement of the unix find command geared towards solving a common problem for programmers on the JVM: finding that specific file or class in your maven repo, classpath, etc when that file can reside either directly on disk or inside a jar archive. 
- 
-Also this tool can be useful in detecting what version a specific class file or source file inside a library jar changed between a number of versions of the library file. 
- 
-Note that this tool is capable of a few extra tricks such as colorizing matches, printing line numbers, printing a configurable number of surrounding context lines, printing out the contents of matched files inside jar files and calculating md5 or sha1 hashes of the content of matched files inside jar files. 
+## Highlights
 
-## Features
-
-- searches both normal files (like \*nix find) and files inside .jar and .zip archives.
-- supports regex matching for file names, paths, and content within the files.
-- support printing contents of matched files, both normal files and files within jar/zip archives.
-- calculates md5, sha1, sha512, crc32, and sha256 hashes for matched files.
-- intra line coloring of matches
-- support for dumping the matched data to a file for post processing
-- ANSI coloring for better visualization, with an option to toggle off
-- built to be open - all side effecting things are in a special namespace and extensibility is supported with protocols
-
-### Examples
-
-To list some examples of how to use `findjar`:
-
-```bash
-findjar --examples
-```
-
-or to see a browser compatible list, please refer to the [examples page](https://github.com/mbjarland/findjar/blob/master/examples.md) (without coloring at the moment - this might change in the near future).
+- **Searches archive interiors.** `.jar` and `.zip` are first-class. Use
+  `--nested` to also descend into jars *inside* jars.
+- **Full regex matching** for file names, paths (relative or absolute),
+  and content. Glob mode (`-G '*.clj'`) when you don't want to type
+  regex.
+- **Grep-like content search** with line numbers, intra-line ANSI
+  highlighting, and asymmetric context (`-A` / `-B` / `-x`).
+- **Cat matched files**, including jar entries, with line numbers and
+  highlighted matches.
+- **Five hash algorithms** (md5, sha1, sha256, sha512, crc32). Compute
+  several at once, or **search by hash** to find every copy of a known
+  file on your classpath.
+- **JSON output** (`--output json`) for piping into `jq` or editor
+  integrations.
+- **Smart defaults** for daily use: searches the current directory if
+  no root is given, accepts multiple roots, skips `.git`, `node_modules`,
+  `target`, `build`, etc., honors `.gitignore` and `NO_COLOR`, doesn't
+  follow symlinks unless asked.
+- **Parallel by default**, with `--parallel-jobs N` and `--no-parallel`
+  knobs for HDDs and networked filesystems. Output is byte-for-byte
+  identical to the serial path.
 
 ## Installation / Building
 
-This project uses:
+Requirements:
+- Java — tested against 11, 17, and 21.
+- Clojure CLI — install instructions: <https://clojure.org/guides/install_clojure>
 
-  * java - tested against java 11, 17, and 21. 
-  * clojure - clojure installation instructions can be found [here](https://clojure.org/guides/install_clojure)
-  
-Under the covers the project uses [clojure tools deps](https://clojure.org/guides/deps_and_cli) and [clojure tools build](https://clojure.org/guides/tools_build) to create an uber jar - but if you just want to build the tool, you don't need to worry about this, just run the build command as per below. 
-
-Assuming the above requirements of java and clojure are met, you can build the project using: 
+Build the standalone jar:
 
 ```bash
- ─➤ clj -T:build uber
+clj -T:build uber
 ```
 
-which will generate an uber/fat jar in the `target` directory after which you can run the tool as described in the section below. 
-
-## Running
-
-Once you have the jar file available you can execute the tool using something like the below: 
-
-```
- ─➤ java -jar target/findjar-1.0.78-standalone.jar ~/.m2/repository/ -n math.clj -g Hickey -x 10
- ```
-
-If you are on osx or \*nix and you want to make life easier you can create an alias: 
-
-```
- ─➤ alias findjar="$JAVA_HOME/bin/java -jar ~/findjar/target/findjar-1.0.98-standalone.jar $@"
-```
-(replacing ~/findjar with wherever your findjar jar file is and replacing JAVA_HOME with a valid java installation path if you don't have JAVA_HOME set).
-
-After this you can run the tool as you would a normal command: 
-
-```
- ─➤ findjar ~/.m2
-```
-
-
-## Basic Usage
+This produces `target/findjar-<version>-standalone.jar`. Run it directly
+or alias it:
 
 ```bash
- ─➤ findjar <search-root> [options]
+alias findjar='java -jar /path/to/findjar-<version>-standalone.jar'
 ```
 
-## Command line help
+## Usage at a glance
 
 ```bash
-─➤ findjar --help
- 
-findjar - a tool for searching through files, including files inside jars 
- 
-usage: findjar <search-root> [-p <path-pattern>] [-g <content-pattern>] [...] 
- 
-findjar searches for files/content in any disk structure. It is capable of 
-looking both for/in normal files and also for/in files inside zip/jar files. 
-It is capable of regex matching both for file name/path and for content 
-within the files. 
- 
-This tool is in essence an improvement of the unix find command geared 
-towards solving a common problem for programmers on the JVM: finding that 
-specific file or class in your maven repo, classpath, etc when that file can 
-reside either directly on disk or inside a jar archive. 
- 
-Also this tool can be useful in detecting what version a specific class file 
-or source file inside a library jar changed between a number of versions of 
-the library file. 
- 
-Note that this tool is capable of a few extra tricks such as writing out the 
-contents of matched files inside jar files and calculating md5 or sha1 hashes 
-of matched files inside jar files. 
- 
-For regular files the path pattern (-p) matches against the entire path, 
-including the file name, i.e.: 
- 
- ~> findjar ~/.m2 -p '.*asm/asm/3.2.*pom' 
- 
- repository/asm/asm/3.2/asm-3.2.pom 
- 
-whereas for files within jar files, the path pattern matches the string: 
- 
- <path-to-jar-file>@<path-within-jar-file> 
- 
-i.e: 
- 
- ~> findjar ~/.m2 -p '.*asm/asm.*Edge.class' 
- 
- repository/asm/asm/3.2/asm-3.2.jar@org/objectweb/asm/Edge.class 
- 
-Command line switches can be provided either using short form i.e. '-t j' or 
-long form i.e. '--type j'. 
- 
-For usage examples: 
- 
- ~> findjar --examples 
- 
-Author: Matias Bjarland / mbjarland@gmail.com 
- 
- 
-findjar 1.0.98 - fa4efc9 - 2023.09.21 16:11:18 + 
- 
-Options: 
-  -p, --path <regex>     a pattern to match against the relative path 
-                         (including file name) starting from search-root
-  -a, --apath <regex>    a pattern to match against the absolute path 
-                         (including file name)
-  -n, --name <regex>     a pattern to match against file names
-  -g, --grep <regex>     a pattern to match against file content lines
-  -t, --types <n|j|z>    restrict the files searched to only the type(s) 
-                         specified. The list of supported file types is 
-                         extensible. Available file types: n - normal files, 
-                         j - files in jar files, z - files in zip files. 
-                         Default: nj
-  -x, --context <#>      If -g is given, show <# of lines> lines of context 
-                         around the match, defaults to 0
-  -o, --out-file <path>  when using -c (cat file), write the contents of the 
-                         located file(s) to the output file
-  -f, --flags <flags>    turns on regex flags for all matches used. Example: 
-                         '-f i' turns on case insensitive matching for both 
-                         file names and content. See oracle javadocs on 
-                         java.util.regex.Pattern (special constructs > match 
-                         flags) for details on java regex flags
-  -c, --cat              cat file. For matching files, print the entire file 
-                         contents on the console
-  -m, --monochrome       turn off ansi-coloring of matching content lines
-  -s, --hash <algo>      calculate file hash(es) for matched files. Available 
-                         algorithms: md5, sha1, sha512, crc32, sha256
-      --profile          internal developer option - enable profiling
-      --examples         print out usage examples
-  -h, --help             show usage information
+# Search the current directory for files containing "TODO":
+findjar -g TODO
+
+# Glob match against file names:
+findjar -G '*.clj'
+
+# Grep across a maven cache, restricted to jar entries, with 1-line context:
+findjar ~/.m2 -n clj -g 'Rich Hickey' -t j -x 1
+
+# Print only the paths of matching files (pipe to your editor):
+findjar . -g TODO -l | xargs $EDITOR
+
+# Cat a manifest from inside a jar:
+findjar ~/.m2 -n MANIFEST.MF -c -t j
+
+# Compute multiple hashes in one go:
+findjar ~/.m2 -n string.clj -t j -s sha1 -s md5
+
+# Find every copy of a known file by sha1:
+findjar ~/.m2 --find-by-hash sha1:da39a3ee5e6b4b0d3255bfef95601890afd80709
+
+# Recurse into nested archives (uberjars, fatjars):
+findjar app.jar --nested -n MANIFEST.MF
+
+# Quiet shell-script mode: exit 0 if any match, 1 otherwise:
+if findjar . -n config.edn -q; then echo found; fi
+
+# JSON output for jq:
+findjar . -g TODO --output json | jq -s 'group_by(.path)'
+
+# Multiple search roots, parallel-jobs limit, no gitignore:
+findjar ~/.m2 ~/.gradle -g 'CVE-' --parallel-jobs 4 --no-gitignore
+```
+
+Run `findjar --help` for the full option list and `findjar --examples`
+for a richer set of worked examples (including ANSI coloring).
+
+## Output format
+
+Default text output is grep-like and stable for shell scripting:
 
 ```
+<path>:<line>  <content>           # grep hit
+<hex> <algo> <path>                # hash
+<<<<<<< <path>                     # cat block start
+1  ...content...
+>>>>>>>                            # cat block end
+```
+
+JSON output (`--output json`) emits one object per line:
+
+```json
+{"kind":"match","path":"src/foo.clj"}
+{"kind":"grep","path":"src/foo.clj","line":42,"hit?":true,"text":"...","matches":[[4,8]]}
+{"kind":"hash","path":"x.jar@y.clj","algo":"sha1","hex":"abc123..."}
+```
+
+## Defaults that just do the right thing
+
+- **No search-root → cwd.** `findjar -g foo` works.
+- **Multiple roots accepted.** Result paths include the root prefix so
+  they're unambiguous.
+- **Skipped by default**: `.git`, `.svn`, `.hg`, `.bzr`, `node_modules`,
+  `target`, `build`, `.gradle`, `.cpcache`, `.idea`, `.vscode`. Override
+  with `--all` or add specifics with repeated `--exclude NAME`.
+- **`.gitignore` honored** (best-effort: simple globs, no negation).
+  Disable with `--no-gitignore`.
+- **Symlinks not followed.** Pass `-L` / `--follow` to follow.
+- **Binary files skipped when grepping.** First 8KB sniffed for NUL
+  bytes (matches `git grep` heuristic). `--text` forces.
+- **`NO_COLOR` env var** disables ANSI coloring. `-m` does the same.
+- **Errors go to stderr**, exit non-zero. Help / version / examples go
+  to stdout, exit 0.
 
 ## License
 
-The project is released under the [Eclipse Public License - v2.0](https://www.eclipse.org/legal/epl-2.0/)
+Eclipse Public License v2.0 — see [LICENSE](LICENSE).
 
 ## Author
 
 Matias Bjarland / [mbjarland@gmail.com](mailto:mbjarland@gmail.com)
-
