@@ -106,7 +106,12 @@
               ;; SecureRandom / etc. work at run time without each algo
               ;; needing a per-class reflection registration.
               "--enable-all-security-services"
-              "-H:IncludeResources=findjar/.*\\.txt"
+              ;; Bundle every resource under findjar/ — usage.txt,
+              ;; examples.txt, and completions/{zsh,bash,fish} (no
+              ;; extension). The earlier '.txt' glob silently dropped the
+              ;; completions, so --completions returned empty when run
+              ;; outside the project's resources/ filesystem fallback.
+              "-H:IncludeResources=findjar/.*"
               "-H:IncludeResources=build/.*\\.edn"
               "-H:+UnlockExperimentalVMOptions"
               ;; Reachability metadata in resources/META-INF/native-image/
