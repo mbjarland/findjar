@@ -127,3 +127,69 @@
       (when (not (zero? exit))
         (throw (ex-info (str "native-image failed (exit " exit ")") {})))
       (log "native binary:" out))))
+
+;;;; ---------------------------------------------------------------------------
+;;;; package — bundle the native binary + completions + man page into a
+;;;; release-ready tarball (or zip on Windows).
+
+(defn- platform-id
+  "Detect host platform for asset naming. Override via TARGET_PLATFORM env."
+  []
+  (or (System/getenv "TARGET_PLATFORM")
+      (let [os   (str/lower-case (System/getProperty "os.name"))
+            arch (str/lower-case (System/getProperty "os.arch"))
+            os'  (cond (str/includes? os "windows") "windows"
+                       (str/includes? os "mac")     "macos"
+                       (str/includes? os "linux")   "linux"
+                       :else                         os)
+            ;; uname -m's "x86_64" → "x64", "aarch64"/"arm64" → "arm64"
+            arch' (cond (#{"x86_64" "amd64"} arch) "x64"
+                        (#{"aarch64" "arm64"} arch) "arm64"
+                        :else arch)]
+        (str os' "-" arch'))))
+
+(defn- windows? []
+  (str/includes? (str/lower-case (System/getProperty "os.name")) "windows"))
+
+(defn package
+  "Bundle target/findjar (+ man page + completions) into an archive named
+  findjar-<version>-<platform>.{tar.gz,zip}. Calls native-image first so
+  the binary is fresh."
+  [_]
+  (native-image nil)
+  (let [plat       (platform-id)
+        win?       (windows?)
+        bin-name   (if win? "findjar.exe" "findjar")
+        ;; native-image always emits 'findjar'; rename for windows
+        out-bin    (str "target/" bin-name)
+        _          (when (and win? (.exists (jio/file "target/findjar")))
+                     (jio/copy (jio/file "target/findjar") (jio/file out-bin))
+                     (.delete (jio/file "target/findjar")))
+        stage      (jio/file (str "target/findjar-" version "-" plat))
+        ext        (if win? "zip" "tar.gz")
+        archive    (str "target/findjar-" version "-" plat "." ext)]
+    (log "packaging" archive)
+    (b/delete {:path (.getPath stage)})
+    (.mkdirs stage)
+    ;; Stage the layout: findjar-<v>-<plat>/{findjar[.exe],LICENSE,
+    ;;   man/findjar.1, completions/{zsh,bash,fish}}
+    (b/copy-file {:src out-bin :target (str (.getPath stage) "/" bin-name)})
+    (.setExecutable (jio/file (str (.getPath stage) "/" bin-name)) true false)
+    (b/copy-file {:src "LICENSE" :target (str (.getPath stage) "/LICENSE")})
+    (b/copy-dir  {:src-dirs ["man"] :target-dir (str (.getPath stage) "/man")})
+    (b/copy-dir  {:src-dirs ["resources/findjar/completions"]
+                  :target-dir (str (.getPath stage) "/completions")})
+    ;; Build the archive
+    (b/delete {:path archive})
+    (let [{:keys [exit]}
+          (if win?
+            (b/process {:command-args ["zip" "-rq" (.getName (jio/file archive))
+                                       (.getName stage)]
+                        :dir          "target"})
+            (b/process {:command-args ["tar" "-czf"
+                                       (.getName (jio/file archive))
+                                       (.getName stage)]
+                        :dir          "target"}))]
+      (when (not (zero? exit))
+        (throw (ex-info (str "archive command failed (exit " exit ")") {}))))
+    (log "archive:" archive)))

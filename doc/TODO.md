@@ -21,13 +21,17 @@ is making it **instant to start** and **one command to install**.
       we now install jansi from -main), and the native-image agent's
       full reachability metadata caused build-time deadlocks under
       analysis, so we hand-trimmed the config.
-- [ ] **Homebrew formula** in a `homebrew-findjar` tap repo:
-      `brew install mbjarland/findjar/findjar`. ~30 lines of Ruby.
-      Pairs naturally with the native-image binary.
-- [ ] **GitHub Actions release pipeline.** Tag push → matrix builds
-      uberjar + native binaries for `linux-x64`, `macos-arm64`, `macos-x64`,
-      `windows-x64`, attaches to the GH Release. Pattern is well-known
-      (used by babashka, clj-kondo). ~50 lines of YAML.
+- [x] **Homebrew formula** at `Formula/findjar.rb`. Drop into a
+      `homebrew-findjar` tap repo (one-time setup documented in
+      `doc/RELEASING.md`). Pulls the prebuilt binary from each
+      release, installs binary + man page + completions.
+- [x] **GitHub Actions release pipeline** at
+      `.github/workflows/release.yml`. Tag push (`v*`) triggers
+      matrix build on `linux-x64` / `macos-arm64` / `macos-x64` /
+      `windows-x64` runners. Each builds the native binary via
+      `clj -T:build package`, archives it with completions + man
+      page, attaches to a GH Release with auto-generated notes and
+      a `SHASUMS256.txt` sidecar. Builds the formula bump can use.
 - [x] **Bash / zsh / fish completions.** Embedded in the binary; users
       get them via `findjar --completions <shell>` and pipe to the
       right path. Source lives at `resources/findjar/completions/`.

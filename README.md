@@ -58,9 +58,29 @@ alias findjar='java -jar /path/to/findjar-<version>-standalone.jar'
 
 ### Native binary (optional, ~30× faster startup)
 
-For a 25–35ms cold start (vs ~750ms for the JVM jar), build a native
-binary via GraalVM. Install Oracle GraalVM 25 (e.g.
-`sdk install java 25.0.3-graal`), then:
+For a 25–35ms cold start (vs ~750ms for the JVM jar), use a native
+binary built via GraalVM.
+
+**Quickest install — Homebrew** (macOS, Linux):
+
+```bash
+brew install mbjarland/findjar/findjar
+```
+
+This pulls a prebuilt platform-native binary from the latest
+[GitHub Release][releases], plus the man page and shell completions.
+
+**From the GitHub Release directly**:
+
+Download `findjar-<version>-<platform>.{tar.gz,zip}` from
+[Releases][releases], extract, and put `findjar` on `$PATH`.
+Platforms: `linux-x64`, `macos-arm64`, `macos-x64`, `windows-x64`.
+
+[releases]: https://github.com/mbjarland/findjar/releases
+
+**Build locally**:
+
+Install Oracle GraalVM 25 (e.g. `sdk install java 25.0.3-graal`), then:
 
 ```bash
 GRAALVM_HOME=$HOME/.sdkman/candidates/java/25.0.3-graal \
@@ -68,14 +88,19 @@ GRAALVM_HOME=$HOME/.sdkman/candidates/java/25.0.3-graal \
 ```
 
 Produces a self-contained `target/findjar` (~34MB on macOS arm64). No
-JVM needed at runtime. The build takes ~30s after the first JIT
-warm-up. Set `GRAALVM_HOME`, `NATIVE_IMAGE_HOME`, or `JAVA_HOME` to
-your Graal install — the build task picks the first one that has
-`bin/native-image`.
+JVM needed at runtime. The build takes ~30s. Set `GRAALVM_HOME`,
+`NATIVE_IMAGE_HOME`, or `JAVA_HOME` to your Graal install — the build
+task picks the first one that has `bin/native-image`.
 
-Native-image cross-compilation isn't supported, but GitHub Actions
-matrix runners can produce binaries for linux-x64, macos-{arm64,x64},
-and windows-x64 in one tag-driven release pipeline. See `doc/TODO.md`.
+To produce a release-ready archive (binary + completions + man page):
+
+```bash
+clj -T:build package    # → target/findjar-<v>-<platform>.tar.gz
+```
+
+The release pipeline at `.github/workflows/release.yml` runs this
+step on each platform's runner; see `doc/RELEASING.md` for the
+end-to-end process.
 
 ### Shell completions
 

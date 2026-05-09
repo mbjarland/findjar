@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        jdk: [ 11, 17, 21 ]         # Support java LTS and latest
+        jdk: [ 11, 17, 21, 25 ]     # Support every Java LTS up through current
         clojure: [ 11 ]
 
     name: Clojure ${{ matrix.clojure }} Java ${{ matrix.jdk }}

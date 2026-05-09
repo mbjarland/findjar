@@ -9,6 +9,23 @@ build numbers.
 
 ### Added (post-merge to master)
 
+- **GitHub Actions release pipeline** at `.github/workflows/release.yml`.
+  Push a `v*` tag → matrix builds the native binary on `linux-x64`,
+  `macos-arm64`, `macos-x64`, `windows-x64` runners; packages each
+  with the man page and shell completions; publishes a GitHub
+  Release with `SHASUMS256.txt` and auto-generated notes.
+- **`clj -T:build package` task** that wraps `native-image` and
+  produces a release-ready `target/findjar-<v>-<platform>.tar.gz`
+  (or `.zip` on Windows). Layout: `findjar/`, `LICENSE`,
+  `man/findjar.1`, `completions/{zsh,bash,fish}`. Honors the
+  `TARGET_PLATFORM` env var so the workflow can name archives
+  consistently across runners.
+- **Homebrew formula** at `Formula/findjar.rb` for shipping via a
+  `mbjarland/homebrew-findjar` tap. `doc/RELEASING.md` documents
+  the per-release process: tag → workflow runs → bump formula sums.
+- **Java 25 in CI matrix.** `.github/workflows/ci.yml` now also
+  tests against the current LTS.
+
 - **`findjar --completions <shell>`** prints a shell completion script
   (zsh, bash, or fish) to stdout. Embedded in the binary so users
   installing a single-file native binary have everything they need:

@@ -1,0 +1,106 @@
+name: Release
+
+# Tag-driven cross-platform release. Push v1.2.3 (or any tag matching v*)
+# and this workflow builds a native binary on each runner, packages it
+# with the man page and completion scripts, and attaches the archives
+# to the GitHub Release.
+#
+# To trigger:  git tag v1.2.3 && git push origin v1.2.3
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual trigger for testing — produces artifacts but doesn't publish
+  # a release.
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to create releases and upload assets
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: macos-latest
+            platform: macos-arm64
+          - os: macos-13       # Intel runners, while Apple keeps offering them
+            platform: macos-x64
+          - os: windows-latest
+            platform: windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GraalVM 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm'   # Oracle GraalVM under GFTC
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Clojure CLI
+        uses: DeLaGuardo/setup-clojure@13.0
+        with:
+          cli: 'latest'
+
+      - name: Cache Clojure deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: cljdeps-${{ runner.os }}-${{ hashFiles('deps.edn', 'build.clj') }}
+          restore-keys: cljdeps-${{ runner.os }}-
+
+      - name: Build & package
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: clojure -T:build package
+
+      - name: Upload archive (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: findjar-${{ matrix.platform }}
+          path: |
+            target/findjar-*-${{ matrix.platform }}.tar.gz
+            target/findjar-*-${{ matrix.platform }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all platform archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Compute SHA-256 sums
+        run: |
+          cd dist
+          shasum -a 256 findjar-* > SHASUMS256.txt
+          cat SHASUMS256.txt
+
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/findjar-*
+            dist/SHASUMS256.txt
