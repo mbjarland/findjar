@@ -1,5 +1,8 @@
 .\" findjar(1) — search files and the contents of jar / zip / tar archives
 .TH FINDJAR 1 "May 2026" "findjar" "User Commands"
+.\" Disable groff's double-space after sentence-ending punctuation
+.\" (".  It" rendered as ". It"). N=normal word space, M=extra after .?!
+.ss 12 0
 .SH NAME
 findjar \- search files and the contents of jar, zip, and tar archives
 .SH SYNOPSIS
@@ -7,23 +10,23 @@ findjar \- search files and the contents of jar, zip, and tar archives
 .RI [ search-root ".\|.\|.] [" options ]
 .SH DESCRIPTION
 .B findjar
-searches files on disk and inside jar, zip, and tar (.tar / .tar.gz / .tgz) archives, with regex matching for file names, paths, and content.
-It is intended for JVM developers tracking down classes, source files, or strings across a maven repo, classpath, or set of jars, but the archive-aware grep core is just as useful for tarballs, distro packages, and Python wheels' source dists.
+searches files on disk and inside jar, zip, and tar (.tar / .tar.gz / .tgz) archives, with regex matching for file names, paths, and content.\&
+It is intended for JVM developers tracking down classes, source files, or strings across a maven repo, classpath, or set of jars, but the archive-aware grep core is just as useful for tarballs, distro packages, and Python wheels' source dists.\&
 With
 .B \-\-nested
-it also descends into jars-inside-jars (uberjars, Spring Boot fatjars, Pants/Bazel uberjars, etc.).
+it also descends into jars-inside-jars (uberjars, Spring Boot fatjars, Pants/Bazel uberjars, etc.).\&
 
 With no
 .IR search-root ,
-findjar searches the current directory.
+findjar searches the current directory.\&
 Multiple
 .IR search-root s
-are scanned in order; result paths are prefixed with the root they came from so they are unambiguous between roots.
+are scanned in order; result paths are prefixed with the root they came from so they are unambiguous between roots.\&
 
 For paths inside archives, path patterns
 .RB ( \-p ", " \-a )
 match against
-.IR <path-to-archive>@<path-within-archive> .
+.IR <path-to-archive>@<path-within-archive> .\&
 With
 .BR \-\-nested ,
 nested archives are joined with additional
@@ -47,7 +50,7 @@ Match against absolute path.
 .BI \-G " glob" ", " \-\-glob " glob"
 Match against file name as a shell glob (e.g.
 .IR \(dq*.clj\(dq )
-instead of regex.
+instead of regex.\&
 Mutually exclusive with
 .BR \-n .
 .TP
@@ -69,7 +72,7 @@ emit lines that do NOT match the pattern.
 Apply the given Pattern flag chars (i, m, s, u, x, d) to every regex.
 .TP
 .BI \-t " types" ", " \-\-types " types"
-Restrict file types: n (normal files), j (entries in jars), z (entries in zips), t (entries in .tar / .tar.gz / .tgz archives). Default: nj.
+Restrict file types: n (normal files), j (entries in jars), z (entries in zips), t (entries in .tar / .tar.gz / .tgz archives).\& Default: nj.
 
 .SS Action
 .TP
@@ -81,13 +84,13 @@ For each matched .jar/.zip entry whose path looks like
 .I META-INF/MANIFEST.MF
 or
 .IR pom.properties ,
-print its contents. Convenient one-step replacement for
+print its contents.\& Convenient one-step replacement for
 .IR "findjar app.jar -t j -p MANIFEST -c" .
 .TP
 .B \-\-class-info
 For each matched .class entry, parse via ASM and print the class
 name, access modifiers, super, implemented interfaces, and method
-signatures. Combines naturally with
+signatures.\& Combines naturally with
 .B \-\-output json
 to emit structured records.
 .TP
@@ -107,8 +110,8 @@ With
 print one path per matching file instead of every matching line.
 .TP
 .BI \-s " algo" ", " \-\-hash " algo"
-Print file hash. Output is
-.IR \(dq<hex> <algo> <path>\(dq .
+Print file hash.\& Output is
+.IR \(dq<hex> <algo> <path>\(dq .\&
 Algorithms: md5, sha1, sha256, sha512, crc32. Repeat
 .B \-s
 to print several.
@@ -117,11 +120,11 @@ to print several.
 Find every file whose hash equals
 .IR hex ;
 e.g.
-.IR sha1:da39a3ee...\& .
+.IR sha1:da39a3ee...\& .\&
 Repeatable.
 .TP
 .BR \-q ", " \-\-quiet
-Suppress all output. Exit status 0 if any match was found, 1 otherwise.
+Suppress all output.\& Exit status 0 if any match was found, 1 otherwise.
 
 .SS Output
 .TP
@@ -150,7 +153,7 @@ lines before each match.
 Output format:
 .B text
 (default) or
-.BR json .
+.BR json .\&
 JSON output emits one object per line.
 .TP
 .BI \-o " path" ", " \-\-out\-file " path"
@@ -161,14 +164,14 @@ append output to
 instead of stdout.
 .TP
 .BR \-m ", " \-\-monochrome
-Disable ANSI coloring of matches. The
+Disable ANSI coloring of matches.\& The
 .B NO_COLOR
 environment variable also disables coloring.
 
 .SS Scanning
 .TP
 .B \-\-all
-Traverse every directory. By default findjar skips
+Traverse every directory.\& By default findjar skips
 .IR .git ,
 .IR .svn ,
 .IR .hg ,
@@ -193,7 +196,7 @@ Do not descend more than
 directory levels below each search-root.
 .TP
 .BI \-\-exclude " name"
-Skip directories with this name. Repeatable; adds to the default exclude list.
+Skip directories with this name.\& Repeatable; adds to the default exclude list.
 .TP
 .B \-\-no\-gitignore
 Do not honor
@@ -206,13 +209,13 @@ With
 do not skip files that look binary (NUL bytes in the first 8 KB).
 .TP
 .B \-\-no\-parallel
-Scan files serially. Default is parallel using ~ cores+2 workers.
+Scan files serially.\& Default is parallel using ~ cores+2 workers.
 .TP
 .BI \-\-parallel\-jobs " n"
-Cap the number of concurrent scan workers. Useful on HDD or networked filesystems.
+Cap the number of concurrent scan workers.\& Useful on HDD or networked filesystems.
 .TP
 .B \-\-nested
-Recurse into jars/zips that appear as entries inside other jars/zips. Path takes the form
+Recurse into jars/zips that appear as entries inside other jars/zips.\& Path takes the form
 .IR outer.jar@inner.jar@entry .
 
 .SS Misc
@@ -223,7 +226,7 @@ Print usage examples and exit.
 .BI \-\-completions " shell"
 Print a shell completion script
 .RB ( zsh ", " bash ", or " fish )
-to stdout. Embedded in the binary so a single-file install has
+to stdout.\& Embedded in the binary so a single-file install has
 everything it needs:
 .RS
 .PP
@@ -238,7 +241,7 @@ everything it needs:
 Print version and exit.
 .TP
 .B \-\-profile
-Enable tufte profiling. Developer flag; emits per-pass timing summaries to stderr.
+Enable tufte profiling.\& Developer flag; emits per-pass timing summaries to stderr.
 .TP
 .BR \-h ", " \-\-help
 Show help and exit.
@@ -264,7 +267,7 @@ If set to a non-empty value, ANSI coloring is disabled (https://no-color.org).
 If set to a non-empty value other than
 .IR 0 ,
 ANSI escape codes are emitted even when stdout is not a TTY (jansi
-otherwise strips them on pipes / redirects). Useful for piping
+otherwise strips them on pipes / redirects).\& Useful for piping
 findjar through pagers
 .RB ( "less -R" )
 or capturing colored output for terminal-rendering tools (asciinema,
