@@ -37,7 +37,7 @@ recipe.
 ┌────────────────────────────────────────────────────────────────────┐
 │  user                                                              │
 │  ────                                                              │
-│   brew install mbjarland/findjar/findjar                           │
+│   brew install mbjarland/tap/findjar                           │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -46,7 +46,7 @@ Three repos are involved:
 | repo | purpose |
 |---|---|
 | `mbjarland/findjar` | source, build pipeline, Formula source-of-truth |
-| `mbjarland/homebrew-findjar` | Homebrew tap (just `Formula/findjar.rb`) |
+| `mbjarland/homebrew-tap` | Homebrew tap (just `Formula/findjar.rb`) |
 | GitHub Releases on `findjar` | hosts the per-platform binary archives |
 
 ---
@@ -215,14 +215,14 @@ git diff Formula/findjar.rb
 ### 3. Push the formula to the tap repo
 
 ```bash
-TAP=~/projects/homebrew-findjar     # or wherever you cloned it
+TAP=~/projects/homebrew-tap     # or wherever you cloned it
 cp Formula/findjar.rb "$TAP/Formula/"
 git -C "$TAP" commit -am "findjar 1.0.136"
 git -C "$TAP" push
 ```
 
 Within seconds, anyone running `brew upgrade findjar` (or first-time
-`brew install mbjarland/findjar/findjar`) gets the new version.
+`brew install mbjarland/tap/findjar`) gets the new version.
 
 ### 4. Optional verify
 
@@ -247,16 +247,16 @@ configure.
 
 ### Homebrew tap repo
 
-`mbjarland/homebrew-findjar` was created as a public repo with the
+`mbjarland/homebrew-tap` was created as a public repo with the
 mandatory `homebrew-` prefix in its name (Homebrew detects taps by
 that prefix). The tap holds a single `Formula/findjar.rb` plus a
 README pointing at the main repo.
 
 ```bash
-gh repo create mbjarland/homebrew-findjar --public \
+gh repo create mbjarland/homebrew-tap --public \
   --description "Homebrew tap for findjar"
-git clone git@github.com:mbjarland/homebrew-findjar.git
-cd homebrew-findjar
+git clone git@github.com:mbjarland/homebrew-tap.git
+cd homebrew-tap
 mkdir Formula
 cp /path/to/findjar/Formula/findjar.rb Formula/
 git add Formula/findjar.rb && git commit -m "Initial tap" && git push
@@ -265,7 +265,7 @@ git add Formula/findjar.rb && git commit -m "Initial tap" && git push
 Anyone then installs via:
 
 ```bash
-brew install mbjarland/findjar/findjar
+brew install mbjarland/tap/findjar
 ```
 
 (The `mbjarland/findjar` middle component is the tap name with the
@@ -350,7 +350,7 @@ update-formula:
       with: { fetch-depth: 0 }
     - uses: actions/checkout@v4   # tap repo, into a subdir
       with:
-        repository: mbjarland/homebrew-findjar
+        repository: mbjarland/homebrew-tap
         path: tap
         token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     - run: |

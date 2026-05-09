@@ -46,7 +46,7 @@ you've been ignoring with `for jar in $(find ...); do unzip -p ... | grep ...; d
 ### Homebrew (macOS, Linux) — recommended
 
 ```bash
-brew install mbjarland/findjar/findjar
+brew install mbjarland/tap/findjar
 ```
 
 Pulls a prebuilt platform-native binary, the man page, and shell

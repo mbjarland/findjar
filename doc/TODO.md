@@ -22,7 +22,7 @@ is making it **instant to start** and **one command to install**.
       full reachability metadata caused build-time deadlocks under
       analysis, so we hand-trimmed the config.
 - [x] **Homebrew formula** at `Formula/findjar.rb`. Drop into a
-      `homebrew-findjar` tap repo (one-time setup documented in
+      `homebrew-tap` repo (one-time setup documented in
       `doc/RELEASING.md`). Pulls the prebuilt binary from each
       release, installs binary + man page + completions.
 - [x] **GitHub Actions release pipeline** at

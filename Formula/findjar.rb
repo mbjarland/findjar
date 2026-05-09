@@ -1,7 +1,7 @@
 # Homebrew formula for findjar. Drop this file into a tap repo
-# (typically mbjarland/homebrew-findjar) and users can install via:
+# (typically mbjarland/homebrew-tap) and users can install via:
 #
-#   brew install mbjarland/findjar/findjar
+#   brew install mbjarland/tap/findjar
 #
 # Or, once published in homebrew-core, just:
 #
@@ -15,20 +15,20 @@
 class Findjar < Formula
   desc     "Search files and the contents of jar/zip archives"
   homepage "https://github.com/mbjarland/findjar"
-  version  "1.0.135"   # bump per release
+  version  "1.0.139"   # bump per release
   license  "EPL-2.0"
 
   # We ship one macOS asset (arm64). Intel macs run the arm64 binary
   # via Rosetta 2 — Homebrew handles this transparently for the user.
   on_macos do
-    url    "https://github.com/mbjarland/findjar/releases/download/v1.0.135/findjar-1.0.135-macos-arm64.tar.gz"
-    sha256 "f94e2f24fae5291bd6d667284fb2ea676566bab9f0f798cd1f4d96b9e23b7ca2"
+    url    "https://github.com/mbjarland/findjar/releases/download/v1.0.139/findjar-1.0.139-macos-arm64.tar.gz"
+    sha256 "0cb8a715e10322502349d413ddcd332d4efff914ed560d34368726f5beb36d87"
   end
 
   on_linux do
     on_intel do
-      url    "https://github.com/mbjarland/findjar/releases/download/v1.0.135/findjar-1.0.135-linux-x64.tar.gz"
-      sha256 "1435d9b7a85f5671a33f99153eea36a86a7fb59b4a1a79ee0e60c4dfd75dce3f"
+      url    "https://github.com/mbjarland/findjar/releases/download/v1.0.139/findjar-1.0.139-linux-x64.tar.gz"
+      sha256 "9ca48155a3444d20e429e17a0b1190ce3e58d9679a2f066b1edc17bf1096967b"
     end
   end
 

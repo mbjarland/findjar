@@ -7,7 +7,7 @@
 # Fetches SHASUMS256.txt from the matching GitHub release, extracts the
 # sums for each platform asset, and patches the version + sha256 lines
 # in Formula/findjar.rb in place. After running, review the diff and
-# push the formula to your homebrew-findjar tap repo.
+# push the formula to your homebrew-tap repo.
 
 set -euo pipefail
 

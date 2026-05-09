@@ -43,7 +43,7 @@ build numbers.
   `TARGET_PLATFORM` env var so the workflow can name archives
   consistently across runners.
 - **Homebrew formula** at `Formula/findjar.rb` for shipping via a
-  `mbjarland/homebrew-findjar` tap. `doc/RELEASING.md` documents
+  `mbjarland/homebrew-tap` tap. `doc/RELEASING.md` documents
   the per-release process: tag → workflow runs → bump formula sums.
 - **Java 25 in CI matrix.** `.github/workflows/ci.yml` now also
   tests against the current LTS.
