@@ -1,0 +1,110 @@
+findjar — search files and the contents of jar/zip archives
+
+Usage:  findjar [<search-root>...] [options]
+
+With no <search-root>, searches the current directory. Multiple roots are
+scanned in order; each result's path is prefixed with the root it came
+from (override with -a).
+
+Path patterns (-p, -a) match against:
+  - <relative-or-absolute-path>          for files on disk
+  - <path-to-jar>@<path-within-jar>      for entries inside jar/zip archives
+
+Without -c / -s / -g, findjar prints the path of each matching file.
+With -g, prints matching content lines (or paths only when combined with -l).
+With -c, prints file contents. With -s, prints file hashes.
+
+Run 'findjar --examples' for usage examples.
+
+Filtering:
+  -n, --name <regex>             match against file name
+  -p, --path <regex>             match against path relative to search-root
+  -a, --apath <regex>            match against absolute path
+  -G, --glob <pattern>           match against file name as a glob (e.g. 
+                                 '*.clj') instead of regex (-n)
+  -g, --grep <regex>             match against file content lines
+  -w, --word-regexp              with -g, match only at word boundaries 
+                                 (wraps the pattern in \b…\b)
+  -v, --invert-match             with -g, emit lines that do NOT match the 
+                                 pattern
+  -f, --flags <flags>            regex flags applied to every pattern. 
+                                 Combine any of: i (case-insensitive), m 
+                                 (multiline), s (dotall), u (unicode-case), x 
+                                 (comments), d (unix-lines).
+  -t, --types <n|j|z|t>          restrict file types: n - normal files, j - 
+                                 files in jar files, z - files in zip files, 
+                                 t - files in tar / tar.gz / tgz archives. 
+                                 Default: nj
+
+Action:
+  -c, --cat                      print the entire contents of matching files 
+                                 (with line numbers)
+      --manifest                 for each matched .jar/.zip, print its 
+                                 META-INF/MANIFEST.MF (and any 
+                                 pom.properties). Implies -t j.
+      --class-info               for each matched .class entry, print class 
+                                 name, super, interfaces, and method 
+                                 signatures (parsed via ASM)
+  -l, --files-only               with -g, print one path per matching file 
+                                 instead of every matching line
+      --count                    with -g, print only the count of matching 
+                                 lines per file ('<path>:<n>')
+      --max-count <n>            with -g, stop after <n> matching lines per 
+                                 file
+  -s, --hash <algo>              print file hash. Output format: '<hex> 
+                                 <algo> <path>'. Algorithms: md5, sha1, 
+                                 sha256, sha512, crc32. Repeat -s to print 
+                                 several.
+      --find-by-hash <algo:hex>  find every file whose hash equals <hex>, 
+                                 e.g. sha1:da39a3ee.... Repeatable.
+  -q, --quiet                    suppress all output. Exit status 0 if any 
+                                 match was found, 1 otherwise
+
+Output:
+  -x, --context <#>              with -g, show <#> lines of symmetric context 
+                                 around each match
+  -A, --after <#>                with -g, show <#> lines of context after 
+                                 each match
+  -B, --before <#>               with -g, show <#> lines of context before 
+                                 each match
+      --output <fmt>             output format: text (default) or json
+  -o, --out-file <path>          with -c, append output to file instead of 
+                                 stdout
+  -m, --monochrome               disable ANSI coloring of matches (NO_COLOR 
+                                 env var also honored)
+
+Scanning:
+      --all                      traverse every directory. By default findjar 
+                                 skips .git, .svn, .hg, node_modules, target, 
+                                 build, .gradle, .cpcache, .idea, .vscode, 
+                                 plus any paths matched by .gitignore at each 
+                                 search-root.
+  -L, --follow                   follow symbolic links (default: don't 
+                                 follow)
+      --max-depth <n>            do not descend more than <n> directory 
+                                 levels below each search-root
+      --exclude <name>           skip directories with this name 
+                                 (repeatable). Adds to the default exclude 
+                                 list.
+      --no-gitignore             do not honor .gitignore files in 
+                                 search-roots
+      --text                     with -g, do not skip files that look binary 
+                                 (NUL bytes in first 8KB)
+      --no-parallel              scan files serially (default is parallel 
+                                 using ~ cores+2 workers)
+      --parallel-jobs <n>        cap the number of concurrent scan workers. 
+                                 Useful on HDD or networked filesystems.
+      --nested                   recurse into jars/zips that appear as 
+                                 entries inside other jars/zips. Path takes 
+                                 the form outer.jar@inner.jar@entry.
+
+Misc:
+      --examples                 print usage examples and exit
+      --completions <shell>      print shell completion script 
+                                 (zsh|bash|fish) and exit
+      --profile                  enable tufte profiling (developer)
+  -V, --version                  print version and exit
+  -h, --help                     show this help and exit
+
+findjar 1.0.139 - c1d9110 - 2026.05.09 14:40:12
+

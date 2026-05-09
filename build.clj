@@ -166,6 +166,24 @@
                         :else arch)]
         (str os' "-" arch'))))
 
+(defn snapshot-docs
+  "Regenerate the doc/HELP.txt and doc/EXAMPLES.txt files from the live
+  binary. Builds the native binary first (so the snapshots match what
+  ships in the next release). README.md links to these so GitHub
+  browsers can read them without installing."
+  [_]
+  (native-image nil)
+  (doseq [[flag out-path] [["--help"     "doc/HELP.txt"]
+                           ["--examples" "doc/EXAMPLES.txt"]]]
+    (log "snapshotting" out-path)
+    (let [{:keys [exit out]}
+          (b/process {:command-args ["target/findjar" flag "-m"]
+                      :out          :capture})]
+      (when (not (zero? exit))
+        (throw (ex-info (str "snapshot-docs: " flag " failed (exit " exit ")") {})))
+      (spit out-path (or out ""))))
+  (log "doc snapshots written"))
+
 (defn package
   "Bundle target/findjar (+ man page + completions) into an archive named
   findjar-<version>-<platform>.{tar.gz,zip}. Calls native-image first so
