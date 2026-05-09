@@ -1,0 +1,122 @@
+
+Examples:
+
+(paths abbreviated with '...' for readability)
+
+  1. List every file under the current directory (and inside any .jar
+     entries). With no search-root, findjar defaults to '.':
+
+     @|bold ~> findjar|@
+
+     src/foo.clj
+     src/bar/baz.clj
+     .../some-lib.jar@META-INF/MANIFEST.MF
+     ...
+
+  2. Find files by name across a maven cache. -n matches the file
+     name, -p matches the (relative) path, -a matches the absolute
+     path:
+
+     @|bold ~> findjar ~/.m2 -n "string.clj"|@
+
+     .../clojure-1.9.0.jar@clojure/string.clj
+     .../clojure-1.7.0.jar@clojure/string.clj
+     .../octet-1.1.0.jar@octet/spec/string.cljc
+     ...
+
+  3. Match by glob instead of regex (-G). Equivalent to -n with
+     translated wildcards:
+
+     @|bold ~> findjar . -G "*.clj"|@
+
+  4. Grep file contents with a regex. -t j restricts to entries inside
+     jar files; -x N adds N lines of context around each match (or use
+     -A / -B for asymmetric context, like grep):
+
+     @|bold ~> findjar ~/.m2 -n clj -g "Rich Hickey" -t j -x 1|@
+
+     .../clojure-1.9.0.jar@clojure/set.clj 9  (ns ^{:doc "Set ops...
+     .../clojure-1.9.0.jar@clojure/set.clj:10       :@|red author "Rich Hickey|@"}
+     .../clojure-1.9.0.jar@clojure/set.clj 11       clojure.set)
+     ...
+
+  5. Print only the paths of files that contain a match. Pipe to your
+     editor or to xargs:
+
+     @|bold ~> findjar . -g "TODO" -l|@
+
+     src/foo.clj
+     src/bar/baz.clj
+
+     @|bold ~> findjar . -g "TODO" -l | xargs $EDITOR|@
+
+  6. Cat an entry inside a jar (with line numbers and intra-line
+     highlighting when combined with -g):
+
+     @|bold ~> findjar ~/.m2 -n MANIFEST.MF -c -t j|@
+
+     @|red <<<<<<<|@ .../clojure-1.9.0.jar@META-INF/MANIFEST.MF
+     @|green 1|@ Manifest-Version: 1.0
+     @|green 2|@ Created-By: Apache Maven
+     @|green 3|@ Main-Class: clojure.main
+     @|red >>>>>>>|@
+
+  7. Compute one or more file hashes. Each line includes the algorithm
+     name so multiple -s flags are unambiguous:
+
+     @|bold ~> findjar ~/.m2 -n string.clj -t j -s sha1 -s md5|@
+
+     94a86681b58d556f1eb13a... sha1 .../clojure-1.9.0.jar@clojure/string.clj
+     f05f65fa44628a954970...   md5  .../clojure-1.9.0.jar@clojure/string.clj
+     7444756fa91b65...         sha1 .../clojure-1.7.0.jar@clojure/string.clj
+     ...
+
+  8. Search several roots in one invocation. Result paths include the
+     root prefix so they're unambiguous:
+
+     @|bold ~> findjar ~/.m2 ~/.gradle -n core.clj -t j|@
+
+     /Users/me/.m2/.../clojure-1.11.1.jar@clojure/core.clj
+     /Users/me/.gradle/caches/.../core.clj
+     ...
+
+  9. Find every file with a given hash anywhere on your classpath. The
+     dual of -s — useful for tracking down which library version
+     contains a specific class:
+
+     @|bold ~> findjar ~/.m2 --find-by-hash sha1:8b86d29c79f3d34d5dba0c50f0c8e6abf6e9b41a|@
+
+ 10. Recurse into nested archives (uberjars, fatjars). The path takes
+     the form outer.jar@inner.jar@entry:
+
+     @|bold ~> findjar app.jar --nested -n MANIFEST.MF|@
+
+ 11. By default findjar skips .git, node_modules, target, build,
+     .gradle, .cpcache, .idea, .vscode, .svn, .hg, plus anything in
+     .gitignore at the search-root. Use --all to traverse everything,
+     --no-gitignore to ignore .gitignore only, or --exclude NAME to
+     add to the skip list:
+
+     @|bold ~> findjar . -g build-version --all|@
+     @|bold ~> findjar . -g build-version --exclude dist --exclude out|@
+
+ 12. Case-insensitive matching: -f i applies the regex CASE_INSENSITIVE
+     flag to every pattern. Other flags: m s u x d (see --help):
+
+     @|bold ~> findjar ~/.m2 -g "rich hickey" -fi -t j|@
+
+ 13. JSON output for piping into jq or for editor integration. One JSON
+     object per line:
+
+     @|bold ~> findjar . -g "TODO" --output json | jq -s 'group_by(.path)'|@
+
+ 14. Quiet mode: no output, exit 0 if any match, 1 otherwise. Useful
+     in shell scripts:
+
+     @|bold ~> if findjar . -n config.edn -q; then echo found; fi|@
+
+ 15. For very large scans (HDD or networked filesystems), bound the
+     parallel worker count or scan serially:
+
+     @|bold ~> findjar /mnt/slow-disk -g 'TODO' --parallel-jobs 4|@
+     @|bold ~> findjar /mnt/slow-disk -g 'TODO' --no-parallel|@

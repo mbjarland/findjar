@@ -1,0 +1,17 @@
+findjar — search files and the contents of jar/zip archives
+
+Usage:  findjar [<search-root>...] [options]
+
+With no <search-root>, searches the current directory. Multiple roots are
+scanned in order; each result's path is prefixed with the root it came
+from (override with -a).
+
+Path patterns (-p, -a) match against:
+  - <relative-or-absolute-path>          for files on disk
+  - <path-to-jar>@<path-within-jar>      for entries inside jar/zip archives
+
+Without -c / -s / -g, findjar prints the path of each matching file.
+With -g, prints matching content lines (or paths only when combined with -l).
+With -c, prints file contents. With -s, prints file hashes.
+
+Run 'findjar --examples' for usage examples.
