@@ -1,4 +1,4 @@
-findjar — search files and the contents of jar/zip archives
+findjar — search files and the contents of jar, zip, and tar archives
 
 Usage:  findjar [<search-root>...] [options]
 
@@ -8,7 +8,10 @@ from (override with -a).
 
 Path patterns (-p, -a) match against:
   - <relative-or-absolute-path>          for files on disk
-  - <path-to-jar>@<path-within-jar>      for entries inside jar/zip archives
+  - <path-to-archive>@<path-within>      for entries inside .jar / .zip /
+                                         .tar / .tar.gz / .tgz archives
+                                         (use --nested for jars-in-jars:
+                                         outer.jar@inner.jar@entry)
 
 Without -c / -s / -g, findjar prints the path of each matching file.
 With -g, prints matching content lines (or paths only when combined with -l).
@@ -106,5 +109,5 @@ Misc:
   -V, --version                  print version and exit
   -h, --help                     show this help and exit
 
-findjar 1.0.139 - c1d9110 - 2026.05.09 14:40:12
+findjar 1.0.148 - 15c88ea - 2026.05.09 16:26:39 +
 

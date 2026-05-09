@@ -53,7 +53,7 @@ Three repos are involved:
 
 ## Local build tasks
 
-`build.clj` exposes four tasks. All run via `clj -T:build <task>`.
+`build.clj` exposes the tasks below. All run via `clj -T:build <task>`.
 
 ### `clean`
 Wipes `target/`. Standard.
@@ -118,6 +118,30 @@ TARGET_PLATFORM=linux-x64 \
   clj -T:build package         # → findjar-X-linux-x64.tar.gz
 ```
 
+### `snapshot-docs`
+
+Builds the native binary, then captures its `--help -m` and
+`--examples -m` output into `doc/HELP.txt` and `doc/EXAMPLES.txt`.
+README.md links to those snapshots so GitHub readers can preview
+findjar's surface without installing it.
+
+### `audit-docs`
+
+Best-effort coverage check. Extracts every long flag from
+`findjar --help` and warns on any that don't appear in
+`man/findjar.1`. Strips groff escapes (`\-\-name` → `--name`) before
+comparing. Read-only — never fails the build.
+
+The README is intentionally short-form (`-c`, `-n`, `-g`, ...) and
+not audited; eyeball the tagline, Highlights, Defaults table, and
+"Usage at a glance" before each release.
+
+### `regen-docs`
+
+Convenience wrapper: runs `snapshot-docs` then `audit-docs`. The
+recommended pre-release entry point — see
+[Cutting a release § 0](#0-regenerate-docs-and-audit-hand-edited-surfaces).
+
 ---
 
 ## Release pipeline
@@ -171,6 +195,43 @@ arm64 binary via Rosetta 2 transparently (Homebrew handles this).
 
 Once the one-time setup below is done, every release looks like this:
 
+### 0. Regenerate docs and audit hand-edited surfaces
+
+Run **before** you tag, so the snapshot files committed in `doc/` and
+the embedded `--help` / `--examples` in the next binary all describe
+the same surface:
+
+```bash
+GRAALVM_HOME=$HOME/.sdkman/candidates/java/25.0.3-graal \
+  clj -T:build regen-docs
+```
+
+What this does:
+
+| Step | Source of truth | Output |
+|---|---|---|
+| Builds the native binary | source + `resources/findjar/{usage,examples}.txt` | `target/findjar` |
+| Snapshots `--help` | embedded in binary | `doc/HELP.txt` |
+| Snapshots `--examples` | embedded in binary | `doc/EXAMPLES.txt` |
+| Audits long flags | `target/findjar --help` | warns if any are missing from `man/findjar.1` |
+
+What this does **not** do — review by hand and edit if anything has
+drifted since the last release:
+
+- `man/findjar.1` — long-form prose for every flag and each
+  environment variable. The audit warns on missing flags but cannot
+  catch stale wording.
+- `README.md` — tagline, Highlights, "Usage at a glance" outputs,
+  Defaults table.
+- `CHANGELOG.md` — add an entry under the new version heading
+  describing user-visible changes since the last tag.
+- `resources/findjar/{usage,examples}.txt` — only edit if you added
+  or renamed a flag, or want a new worked example.
+
+Once you're satisfied, commit any doc changes and re-run
+`clj -T:build regen-docs` so `doc/HELP.txt` / `doc/EXAMPLES.txt`
+reflect the final source-of-truth.
+
 ### 1. Tag and push
 
 ```bash
@@ -181,9 +242,14 @@ clj -M:test                # sanity-check, expect 0 failures
 
 # Pick the version. build.clj derives it as 1.0.<git-rev-count>;
 # the next tag should match what 'clj -T:build uber' would print.
-git tag v1.0.136 -m "findjar 1.0.136"
+git tag -a v1.0.136 -m "findjar 1.0.136"
 git push origin v1.0.136
 ```
+
+Note: prefer annotated tags (`-a`). `git rev-parse v1.0.136` then
+returns the tag-object SHA, not the commit; use
+`git rev-list -n 1 v1.0.136` to get the underlying commit SHA (which
+is what the binary's `--version` prints).
 
 The push triggers `release.yml`. Watch progress:
 

@@ -7,3 +7,4 @@ projectFilesBackup/
 .calva/
 .clj-kondo/
 bin
+.claude/

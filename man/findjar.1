@@ -1,14 +1,14 @@
-.\" findjar(1) — search files and the contents of jar/zip archives
+.\" findjar(1) — search files and the contents of jar / zip / tar archives
 .TH FINDJAR 1 "May 2026" "findjar" "User Commands"
 .SH NAME
-findjar \- search files and the contents of jar/zip archives
+findjar \- search files and the contents of jar, zip, and tar archives
 .SH SYNOPSIS
 .B findjar
 .RI [ search-root ".\|.\|.] [" options ]
 .SH DESCRIPTION
 .B findjar
-searches files on disk and inside jar/zip archives, with regex matching for file names, paths, and content.
-It is intended for JVM developers tracking down classes, source files, or strings across a maven repo, classpath, or set of jars.
+searches files on disk and inside jar, zip, and tar (.tar / .tar.gz / .tgz) archives, with regex matching for file names, paths, and content.
+It is intended for JVM developers tracking down classes, source files, or strings across a maven repo, classpath, or set of jars, but the archive-aware grep core is just as useful for tarballs, distro packages, and Python wheels' source dists.
 With
 .B \-\-nested
 it also descends into jars-inside-jars (uberjars, Spring Boot fatjars, Pants/Bazel uberjars, etc.).
@@ -23,7 +23,13 @@ are scanned in order; result paths are prefixed with the root they came from so 
 For paths inside archives, path patterns
 .RB ( \-p ", " \-a )
 match against
-.IR <path-to-jar>@<path-within-jar> .
+.IR <path-to-archive>@<path-within-archive> .
+With
+.BR \-\-nested ,
+nested archives are joined with additional
+.B @
+separators:
+.IR outer.jar@inner.jar@entry .
 
 .SH OPTIONS
 
@@ -47,6 +53,17 @@ Mutually exclusive with
 .TP
 .BI \-g " regex" ", " \-\-grep " regex"
 Match against file content lines.
+.TP
+.BR \-w ", " \-\-word\-regexp
+With
+.BR \-g ,
+match only at word boundaries: the pattern is wrapped in
+.IR \eb...\eb .
+.TP
+.BR \-v ", " \-\-invert\-match
+With
+.BR \-g ,
+emit lines that do NOT match the pattern.
 .TP
 .BI \-f " flags" ", " \-\-flags " flags"
 Apply the given Pattern flag chars (i, m, s, u, x, d) to every regex.
@@ -203,8 +220,25 @@ Recurse into jars/zips that appear as entries inside other jars/zips. Path takes
 .B \-\-examples
 Print usage examples and exit.
 .TP
+.BI \-\-completions " shell"
+Print a shell completion script
+.RB ( zsh ", " bash ", or " fish )
+to stdout. Embedded in the binary so a single-file install has
+everything it needs:
+.RS
+.PP
+.B findjar --completions zsh > ~/.zfunc/_findjar
+.PP
+.B findjar --completions bash > /etc/bash_completion.d/findjar
+.PP
+.B findjar --completions fish > ~/.config/fish/completions/findjar.fish
+.RE
+.TP
 .BR \-V ", " \-\-version
 Print version and exit.
+.TP
+.B \-\-profile
+Enable tufte profiling. Developer flag; emits per-pass timing summaries to stderr.
 .TP
 .BR \-h ", " \-\-help
 Show help and exit.
@@ -224,7 +258,25 @@ was set and nothing matched.
 .SH ENVIRONMENT
 .TP
 .B NO_COLOR
-If set to a non-empty value, ANSI coloring is disabled.
+If set to a non-empty value, ANSI coloring is disabled (https://no-color.org).
+.TP
+.B FORCE_COLOR
+If set to a non-empty value other than
+.IR 0 ,
+ANSI escape codes are emitted even when stdout is not a TTY (jansi
+otherwise strips them on pipes / redirects). Useful for piping
+findjar through pagers
+.RB ( "less -R" )
+or capturing colored output for terminal-rendering tools (asciinema,
+svg-term-cli, freeze).
+.B \-m
+and
+.B NO_COLOR
+still win.
+.TP
+.B FINDJAR_DEBUG
+If set, warning output includes the offending stack trace (otherwise
+warnings emit only the message).
 
 .SH EXAMPLES
 .PP

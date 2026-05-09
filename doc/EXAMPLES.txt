@@ -41,6 +41,23 @@ Examples:
 
      ~> findjar . -g "throw new" -A 3   # 3 lines AFTER each match
 
+  4a. Word-boundary match (-w) and inverted match (-v), like grep:
+
+     ~> findjar . -g "log" -w         # matches 'log' but NOT 'login', 'analog'
+     ~> findjar . -g "DEBUG" -v       # emit lines that do NOT contain DEBUG
+
+  4b. Count-only mode (--count) and an early-stop cap on the per-file
+      hit count (--max-count). Both compose with -t / -n / paths etc.:
+
+     ~> findjar . -g "TODO" --count
+     src/foo.clj:3
+     src/bar.clj:1
+     test/foo_test.clj:2
+
+     ~> findjar ~/.m2 -t j -g "deprecated" --max-count 1 -l
+     # → list every jar that contains the word 'deprecated' anywhere,
+     #   stopping at the first hit per file (much faster than -l alone)
+
   5. Print only the paths of files that contain a match (-l). Pipe to
      your editor or to xargs:
 
@@ -238,3 +255,18 @@ Examples:
 
      ~> NO_COLOR=1 findjar . -g 'fn ' | less
      ~> findjar . -g 'fn ' -m | less
+
+ 19. FORCE_COLOR forces ANSI passthrough even on a non-TTY stdout
+     (pipe / redirect). Useful for piping into pagers that re-render
+     escapes, or for tools that capture colored output:
+
+     ~> FORCE_COLOR=1 findjar . -g TODO | less -R
+     ~> FORCE_COLOR=1 findjar . -g TODO > out.txt   # ANSI preserved
+     # -m / NO_COLOR still win.
+
+ 20. Shell completions are embedded in the binary. Pipe each script
+     to its install location once and reload your shell:
+
+     ~> findjar --completions zsh  > ~/.zfunc/_findjar
+     ~> findjar --completions bash > /etc/bash_completion.d/findjar
+     ~> findjar --completions fish > ~/.config/fish/completions/findjar.fish

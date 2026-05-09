@@ -9,11 +9,12 @@
 [![Made with Clojure](https://img.shields.io/badge/Clojure-1.11-5881d8?logo=clojure)](https://clojure.org)
 [![Powered by GraalVM](https://img.shields.io/badge/Native-GraalVM_25-orange?logo=oracle)](https://www.graalvm.org)
 
-Search files on disk **and inside jar / zip archives** — including
-nested jars-inside-jars (Spring Boot fatjars, uberjars, shaded
-clients). Regex match on file name, path, or content. Compute hashes,
-extract manifests, dump archives, pipe to `jq` — all at **~22ms cold
-start** as a native binary.
+Search files on disk **and inside jar, zip, and tar archives**
+(`.tar` / `.tar.gz` / `.tgz`) — including nested jars-inside-jars
+(Spring Boot fatjars, uberjars, shaded clients). Regex match on file
+name, path, or content. Compute hashes, extract manifests, dump
+archives, pipe to `jq` — all at **~22ms cold start** as a native
+binary.
 
 <p align="center">
   <img src="doc/img/demo.svg" alt="findjar searching ~/.m2 with colored output" width="780">
@@ -343,6 +344,7 @@ feeding an LLM. See `findjar --examples` for `jq` workflow snippets.
 | **Don't** follow symlinks | `-L` / `--follow` |
 | Skip binary files when grepping (NUL-byte sniff) | `--text` |
 | Honor `NO_COLOR` env var | `-m` / `--monochrome` to disable ANSI explicitly |
+| ANSI stripped on non-TTY stdout (pipe / redirect) | `FORCE_COLOR=1` to force ANSI passthrough (for `less -R`, asciinema, etc.) |
 | Errors → stderr (exit non-zero); help / version → stdout (exit 0) | n/a |
 | Parallel scan (~ cores+2 workers) | `--parallel-jobs N` to cap; `--no-parallel` for serial |
 | Hash output: `<hex> <algo> <path>` so multi-algo is parseable | n/a |
@@ -364,8 +366,10 @@ automatically. Reload your shell, then `findjar -<TAB>` enumerates
 flags, `findjar -t <TAB>` shows type selectors (n j z), `findjar -s <TAB>`
 lists hash algorithms.
 
-For oh-my-zsh, see the install instructions in
-[`doc/INSTALL.md`](doc/INSTALL.md) (or just `findjar --examples`).
+For oh-my-zsh: drop the file under
+`~/.oh-my-zsh/custom/plugins/findjar/_findjar` and add `findjar` to
+the `plugins=(...)` line in `~/.zshrc`, or simply pipe the output to
+any directory already on your zsh `$fpath`.
 
 ---
 

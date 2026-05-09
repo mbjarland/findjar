@@ -184,6 +184,57 @@
       (spit out-path (or out ""))))
   (log "doc snapshots written"))
 
+(defn audit-docs
+  "Best-effort coverage check: walk findjar's --help output, extract
+  every long flag name, and warn if any is missing from the man
+  page. Catches the common drift case where a CLI option was added
+  but the hand-edited man page wasn't updated.
+
+  The README intentionally describes most flags by their short form
+  (-c, -n, -g, ...) for brevity, so README coverage is left as a
+  manual pre-release scan rather than an automated check.
+
+  Does not fail the build — prose drift always needs a human read.
+  Run via 'clj -T:build audit-docs' or as part of regen-docs."
+  [_]
+  (let [bin "target/findjar"
+        _   (when-not (.canExecute (jio/file bin))
+              (log "audit-docs: building" bin "first")
+              (native-image nil))
+        {:keys [out]} (b/process {:command-args [bin "--help" "-m"]
+                                  :out          :capture})
+        ;; Strip groff backslash escapes (\-\- / \-) so '\-\-name' in
+        ;; the man page reads as '--name' for the includes? check.
+        man-text (str/replace (slurp "man/findjar.1") "\\-" "-")
+        ;; Extract long flags from --help output.
+        flags    (->> (re-seq #"--[a-z][a-z0-9-]+" (or out ""))
+                      (remove #{"--" "--help" "--examples" "--version"
+                                "--monochrome"})
+                      distinct
+                      sort)
+        missing  (remove #(str/includes? man-text %) flags)]
+    (log "audit-docs: checking" (count flags) "long flags against man/findjar.1")
+    (if (seq missing)
+      (log "WARN man/findjar.1 missing:" (str/join " " missing))
+      (log "ok   man/findjar.1 covers every long flag"))))
+
+(defn regen-docs
+  "One-shot pre-release doc regen:
+    1. Build the native binary fresh (via snapshot-docs → native-image).
+    2. Snapshot doc/HELP.txt and doc/EXAMPLES.txt from --help / --examples.
+    3. Audit man page + README for any flag missing from the prose.
+
+  Hand-edited surfaces (man/findjar.1, README.md, resources/findjar/
+  *.txt, CHANGELOG.md) are NOT regenerated — those are sources of
+  truth. The audit step is a coverage warning, not a build failure.
+
+  Run before 'git tag v...' so the next release ships current docs.
+  See doc/RELEASING.md for the full release checklist."
+  [_]
+  (snapshot-docs nil)
+  (audit-docs nil)
+  (log "regen-docs: review 'git diff doc/' and CHANGELOG before tagging"))
+
 (defn package
   "Bundle target/findjar (+ man page + completions) into an archive named
   findjar-<version>-<platform>.{tar.gz,zip}. Calls native-image first so
