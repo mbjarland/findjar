@@ -8,6 +8,7 @@
             [findjar.main :as main]
             [findjar.output.buffering :as buf]
             [findjar.recording-output :as ro]
+            [findjar.render :as r]
             [findjar.test-fixtures :as fix])
   (:import [java.io File]
            [java.nio.file Files]
@@ -65,8 +66,13 @@
 (deftest types-filter-jar-only
   (let [out (run {:types #{"jar"}})
         paths (set (ro/paths-of out :match))]
-    (is (every? #(str/includes? % "lib.jar@") paths))
-    (is (not (some #(re-find #"\.txt$" %) paths)))))
+    (testing "every match is a jar-entry path (contains @)"
+      (is (every? #(.contains ^String % "@") paths)))
+    (testing "no plain disk files"
+      (is (not (contains? paths "alpha.txt"))))
+    (testing "lib.jar entries appear"
+      (is (contains? paths "lib.jar@clojure/string.clj"))
+      (is (contains? paths "lib.jar@META-INF/MANIFEST.MF")))))
 
 (deftest types-filter-zip-only
   (let [out (run {:types #{"zip"}})
@@ -183,7 +189,7 @@
     (is (str/includes? (nth (first rows) 2) "Manifest-Version: 1.0"))))
 
 ;; ----------------------------------------------------------------------------
-;; -o (out-file) — exercises main/render-cat + default-output's file-write path
+;; -o (out-file) — exercises render/render-cat + default-output's file-write path
 
 (deftest cat-with-out-file-writes-and-strips-ansi
   (let [tmp (.toFile (Files/createTempFile "findjar-cat-" ".txt"
@@ -192,7 +198,7 @@
       (let [output (main/default-output)
             opts   {:name #"^alpha\.txt$" :cat true :out-file tmp
                     :monochrome true :types #{:default "jar"}}]
-        (c/perform-scan *root* output main/render-cat opts)
+        (c/perform-scan *root* output r/render-cat opts)
         (let [contents (slurp tmp)]
           (testing "file-mode output suppresses line-number prefixes"
             (is (str/includes? contents "hello"))
@@ -235,10 +241,13 @@
       (is (contains? paths "target/junk.txt"))
       (is (contains? paths ".git/HEAD")))))
 
-(deftest empty-jar-does-not-crash
-  (let [out (run {:types #{"jar"}})]
-    (testing "no warnings emitted for the zero-byte jar"
-      (is (empty? (filter #(= :warn (first %)) (ro/calls-of out)))))
+(deftest empty-jar-warns-but-does-not-crash
+  (let [out   (run {:types #{"jar"}})
+        warns (filter #(= :warn (first %)) (ro/calls-of out))]
+    (testing "the zero-byte jar produces a warn (no longer silent)"
+      (is (= 1 (count warns)))
+      (is (re-find #"empty\.jar" (nth (first warns) 1)))
+      (is (re-find #"zero-byte" (nth (first warns) 1))))
     (testing "scan still completes and reports lib.jar entries"
       (is (some #(= "lib.jar@clojure/string.clj" %)
                 (ro/paths-of out :match))))))
@@ -251,6 +260,121 @@
     (testing "match calls appear in the same input order serial vs parallel"
       (is (= (ro/paths-of (run opts) :match)
              (ro/paths-of (run-parallel opts) :match))))))
+
+;; ----------------------------------------------------------------------------
+;; --max-depth, --exclude, --no-gitignore, .gitignore, symlinks
+
+(deftest max-depth-zero-emits-nothing
+  (let [paths (set (ro/paths-of (run {:max-depth 0}) :match))]
+    (is (empty? paths))))
+
+(deftest max-depth-one-keeps-only-direct-children
+  (let [paths (set (ro/paths-of (run {:max-depth 1}) :match))]
+    (testing "alpha.txt at root is included"
+      (is (contains? paths "alpha.txt")))
+    (testing "nested/gamma.txt at depth 2 is excluded"
+      (is (not (contains? paths "nested/gamma.txt"))))))
+
+(deftest exclude-flag-adds-to-default-exclusions
+  (let [paths (set (ro/paths-of (run {:exclude #{"nested"}}) :match))]
+    (testing "nested/ contents are excluded"
+      (is (not (some #(.startsWith ^String % "nested/") paths))))
+    (testing "default exclusions still apply (target/, .git/)"
+      (is (not (some #(.startsWith ^String % "target/") paths))))))
+
+(deftest gitignore-applied-by-default
+  (let [paths (set (ro/paths-of (run {:all true}) :match))]
+    (testing "fixture's .gitignore excludes 'ignored/' and '*.log'"
+      (is (not (some #(.startsWith ^String % "ignored/") paths)))
+      (is (not (contains? paths "trace.log"))))
+    (testing "files not matched by gitignore are included"
+      (is (contains? paths "alpha.txt")))))
+
+(deftest no-gitignore-flag-disables-gitignore
+  (let [paths (set (ro/paths-of (run {:all true :no-gitignore true}) :match))]
+    (testing "with --no-gitignore, ignored/ and *.log are reachable"
+      (is (contains? paths "ignored/secret.clj"))
+      (is (contains? paths "trace.log")))))
+
+;; ----------------------------------------------------------------------------
+;; -A / -B asymmetric grep context
+
+(deftest grep-after-only
+  (let [out (run {:grep #"world" :after 1})
+        rows (->> (ro/calls-of out)
+                  (filter #(= :grep (first %)))
+                  (map #(nth % 2))
+                  (filter #(= "alpha.txt" (:path %)))
+                  (sort-by :line-#))]
+    (testing "1 hit + 1 line of after-context, no before"
+      (is (= [1 2] (mapv :line-# rows)))
+      (is (= [true false] (mapv :hit? rows))))))
+
+(deftest grep-before-only
+  (let [out (run {:grep #"world" :before 1})
+        rows (->> (ro/calls-of out)
+                  (filter #(= :grep (first %)))
+                  (map #(nth % 2))
+                  (filter #(= "alpha.txt" (:path %)))
+                  (sort-by :line-#))]
+    (testing "1 line of before-context + the hit, no after"
+      (is (= [0 1] (mapv :line-# rows)))
+      (is (= [false true] (mapv :hit? rows))))))
+
+;; ----------------------------------------------------------------------------
+;; Binary file skipping
+
+(deftest binary-files-skipped-when-grepping
+  (let [out (run {:grep #"hello"
+                  :types #{:default}})
+        paths (set (ro/paths-of out :grep))]
+    (testing "binary.dat (NUL in first 8KB) is not grepped"
+      (is (not (some #(= "binary.dat" %) paths))))))
+
+(deftest text-flag-forces-binary-grep
+  (let [;; --text: even binary.dat gets read; the regex is plain so it'll
+        ;; emit a non-hit line for any text content present
+        out (run {:grep #"^Hello$" :text true :types #{:default}
+                  :name #"^binary\.dat$"})]
+    (testing "with --text the binary file is read (no skip warning, no error)"
+      (is (empty? (filter #(= :warn (first %)) (ro/calls-of out)))))))
+
+;; ----------------------------------------------------------------------------
+;; Nested jar recursion
+
+(deftest nested-flag-recurses-into-inner-jars
+  (let [paths (set (ro/paths-of
+                     (run {:nested true :types #{"jar"}})
+                     :match))]
+    (testing "without --nested, inner.jar entries aren't reachable"
+      (let [paths-no-nested (set (ro/paths-of
+                                   (run {:types #{"jar"}})
+                                   :match))]
+        (is (not (some #(.contains ^String % "inner.jar@") paths-no-nested)))))
+    (testing "with --nested, the inner jar's entries appear under outer.jar@inner.jar@"
+      (is (contains? paths "outer.jar@inner.jar@deep/token.txt")))))
+
+(deftest nested-grep-finds-marker
+  (let [out (run {:nested true :grep #"NESTED-MARKER" :types #{"jar"}})
+        hits (->> (ro/calls-of out)
+                  (filter #(= :grep (first %)))
+                  (map #(nth % 2))
+                  (filter :hit?))]
+    (is (= 1 (count hits)))
+    (is (= "outer.jar@inner.jar@deep/token.txt" (:path (first hits))))))
+
+;; ----------------------------------------------------------------------------
+;; --find-by-hash
+
+(deftest find-by-hash-emits-match
+  ;; sha1 of "hello\nworld\nclojure rocks\n" is the alpha-content sha1.
+  (let [target "cccc310785c1b7e82379306807694140ccb06739"
+        out (run {:find-by-hash [{:algo :sha1 :hex target}]
+                  :types #{:default}})
+        paths (set (ro/paths-of out :match))]
+    (is (contains? paths "alpha.txt"))
+    (testing "non-matching files don't emit"
+      (is (not (contains? paths "beta.clj"))))))
 
 (deftest parallel-grep-matches-serial
   (let [opts {:grep #"Rich Hickey"}

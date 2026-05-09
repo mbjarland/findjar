@@ -105,6 +105,77 @@
   (let [{:keys [opts]} (parsed "/tmp")]
     (is (not (:all opts)))))
 
+(deftest version-flag-short-circuits
+  (let [{:keys [exit-message ok?]} (parsed "--version")]
+    (is ok?)
+    (is (str/starts-with? exit-message "findjar ")))
+  (let [{:keys [ok?]} (parsed "-V")]
+    (is ok?)))
+
+(deftest quiet-flag-parses
+  (let [{:keys [opts]} (parsed "/tmp" "-q")]
+    (is (true? (:quiet opts))))
+  (let [{:keys [opts]} (parsed "/tmp" "--quiet")]
+    (is (true? (:quiet opts)))))
+
+(deftest follow-flag-parses
+  (is (true? (:follow (:opts (parsed "/tmp" "-L")))))
+  (is (nil?  (:follow (:opts (parsed "/tmp"))))))
+
+(deftest max-depth-flag-parses
+  (let [{:keys [opts]} (parsed "/tmp" "--max-depth" "3")]
+    (is (= 3 (:max-depth opts))))
+  (let [r (parsed "/tmp" "--max-depth" "-1")]
+    (is (str/includes? (:exit-message r) "must be >= 0"))))
+
+(deftest exclude-flag-accumulates
+  (let [{:keys [opts]} (parsed "/tmp" "--exclude" "dist" "--exclude" "out")]
+    (is (= #{"dist" "out"} (:exclude opts)))))
+
+(deftest no-gitignore-flag
+  (is (true? (:no-gitignore (:opts (parsed "/tmp" "--no-gitignore"))))))
+
+(deftest output-format-flag
+  (let [{:keys [opts]} (parsed "/tmp" "--output" "json")]
+    (is (= :json (:output opts))))
+  (let [r (parsed "/tmp" "--output" "yaml")]
+    (is (str/includes? (:exit-message r) "must be 'text' or 'json'"))))
+
+(deftest after-before-flags
+  (is (= 3 (:after  (:opts (parsed "/tmp" "-A" "3")))))
+  (is (= 2 (:before (:opts (parsed "/tmp" "-B" "2")))))
+  (is (str/includes? (:exit-message (parsed "/tmp" "-A" "-1"))
+                     "must be >= 0")))
+
+(deftest glob-flag-and-name-mutex
+  (let [{:keys [opts]} (parsed "/tmp" "-G" "*.clj")]
+    (testing "glob compiles to a regex on the :name slot"
+      (is (some? (:name opts)))
+      (is (re-find (:name opts) "foo.clj"))
+      (is (not (re-find (:name opts) "foo.cljc")))))
+  (let [r (parsed "/tmp" "-G" "*.clj" "-n" "x")]
+    (is (str/includes? (:exit-message r) "--glob (-G) and --name (-n)"))))
+
+(deftest unknown-flag-chars-rejected
+  (let [r (parsed "/tmp" "-f" "iq")]
+    (is (str/includes? (:exit-message r)
+                       "must be a combination of i, m, s, u, x, d"))))
+
+(deftest find-by-hash-parses
+  (let [{:keys [opts]} (parsed "/tmp"
+                                "--find-by-hash"
+                                "sha1:da39a3ee5e6b4b0d3255bfef95601890afd80709")]
+    (is (= [{:algo :sha1 :hex "da39a3ee5e6b4b0d3255bfef95601890afd80709"}]
+           (:find-by-hash opts))))
+  (let [r (parsed "/tmp" "--find-by-hash" "nope")]
+    (is (str/includes? (:exit-message r) "must be of the form")))
+  (let [r (parsed "/tmp" "--find-by-hash" "weird:abc")]
+    (is (str/includes? (:exit-message r) "unknown algorithm"))))
+
+(deftest text-and-nested-flags
+  (is (true? (:text   (:opts (parsed "/tmp" "--text")))))
+  (is (true? (:nested (:opts (parsed "/tmp" "--nested"))))))
+
 (deftest version-string-test
   (let [v (cli/version-string)]
     (testing "non-empty"

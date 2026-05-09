@@ -73,6 +73,30 @@
     (.createNewFile (jio/file root "empty.jar"))
     (write-text! (jio/file root "target" "junk.txt") "build artifact\n")
     (write-text! (jio/file root ".git" "HEAD") "ref: refs/heads/main\n")
+    ;; A binary-looking file (NUL byte in first 8KB) for binary-skip tests.
+    (let [^File f (jio/file root "binary.dat")]
+      (jio/make-parents f)
+      (with-open [out (jio/output-stream f)]
+        (.write out (byte-array [(byte 0x48) (byte 0x00) (byte 0x65) (byte 0x6c)
+                                  (byte 0x6c) (byte 0x6f)]))))
+    ;; A nested jar (uberjar shape): outer.jar contains inner.jar which
+    ;; contains a token file with a unique grep target.
+    (let [inner-bytes (let [baos (java.io.ByteArrayOutputStream.)]
+                        (with-open [zos (java.util.zip.ZipOutputStream. baos)]
+                          (.putNextEntry zos
+                            (java.util.zip.ZipEntry. "deep/token.txt"))
+                          (let [b (.getBytes "NESTED-MARKER\n" "UTF-8")]
+                            (.write zos b 0 (alength b)))
+                          (.closeEntry zos))
+                        (.toByteArray baos))]
+      (write-zip! (jio/file root "outer.jar")
+                  [["inner.jar" inner-bytes]
+                   ["plain.txt" "outer plain content\n"]]))
+    ;; A .gitignore at the root excluding 'ignored/' and '*.log'.
+    (write-text! (jio/file root ".gitignore")
+                 "# fixture gitignore\nignored/\n*.log\n")
+    (write-text! (jio/file root "ignored" "secret.clj") "should be ignored\n")
+    (write-text! (jio/file root "trace.log") "log content\n")
     root))
 
 (defn delete-recursively! [^File f]

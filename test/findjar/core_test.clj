@@ -64,3 +64,21 @@
   (testing "non-pattern keys untouched"
     (let [opts (c/munge-regexes {:flags "i" :context 3 :name #"a"})]
       (is (= 3 (:context opts))))))
+
+(deftest unknown-flag-chars-test
+  (is (= #{}            (c/unknown-flag-chars "imsuxd")))
+  (is (= #{\q}          (c/unknown-flag-chars "iq")))
+  (is (= #{\1 \q}       (c/unknown-flag-chars "1q"))))
+
+(deftest binary-stream?-test
+  (testing "ASCII content is not binary"
+    (is (false? (c/binary-stream?
+                  (java.io.ByteArrayInputStream.
+                    (.getBytes "hello world\n" "UTF-8"))))))
+  (testing "NUL byte in first 8KB triggers binary detection"
+    (is (true? (c/binary-stream?
+                 (java.io.ByteArrayInputStream.
+                   (byte-array [(byte 0x48) (byte 0x00) (byte 0x65)]))))))
+  (testing "empty stream is not binary"
+    (is (false? (c/binary-stream?
+                  (java.io.ByteArrayInputStream. (byte-array 0)))))))
