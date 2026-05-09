@@ -70,17 +70,35 @@
 ;;;; Set NATIVE_IMAGE_HOME, JAVA_HOME, or have `native-image` on PATH.
 ;;;; Usage:  clj -T:build native-image
 
+(defn- windows? []
+  (str/includes? (str/lower-case (System/getProperty "os.name")) "windows"))
+
 (defn- which
-  "Locate cmd on PATH. Returns the absolute path or nil."
+  "Locate cmd on PATH. Returns the absolute path or nil. Uses 'where' on
+  Windows, 'which' elsewhere."
   [^String cmd]
-  (let [{:keys [exit out]} (b/process {:command-args ["/usr/bin/env" "which" cmd]
+  (let [tool (if (windows?) "where" "which")
+        {:keys [exit out]} (b/process {:command-args [tool cmd]
                                        :out :capture})]
-    (when (zero? exit) (str/trim out))))
+    (when (zero? exit)
+      ;; 'where' may print multiple matches; take the first.
+      (-> out str/split-lines first str/trim))))
+
+(defn- native-image-candidates
+  "Possible paths to the native-image launcher under a Graal install root.
+  On Windows the launcher is native-image.cmd; on POSIX, plain native-image."
+  [home]
+  (when home
+    (if (windows?)
+      [(str home "/bin/native-image.cmd") (str home "/bin/native-image")]
+      [(str home "/bin/native-image")])))
 
 (defn- find-native-image-bin []
-  (or (some #(let [p (some-> (System/getenv %) (str "/bin/native-image"))]
-               (when (and p (.canExecute (jio/file p))) p))
+  (or (some (fn [env]
+              (some #(when (.canExecute (jio/file %)) %)
+                    (native-image-candidates (System/getenv env))))
             ["NATIVE_IMAGE_HOME" "GRAALVM_HOME" "JAVA_HOME"])
+      (which (if (windows?) "native-image.cmd" "native-image"))
       (which "native-image")
       (throw (ex-info "native-image not found. Install Oracle GraalVM 25
                        and ensure native-image is on PATH or set GRAALVM_HOME
@@ -147,9 +165,6 @@
                         (#{"aarch64" "arm64"} arch) "arm64"
                         :else arch)]
         (str os' "-" arch'))))
-
-(defn- windows? []
-  (str/includes? (str/lower-case (System/getProperty "os.name")) "windows"))
 
 (defn package
   "Bundle target/findjar (+ man page + completions) into an archive named
