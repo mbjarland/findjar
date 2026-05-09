@@ -1,151 +1,138 @@
 # findjar
 
-[![Build Status](https://github.com/mbjarland/findjar/actions/workflows/ci.yml/badge.svg)](https://github.com/mbjarland/findjar/actions)
-[![License](https://img.shields.io/badge/License-EPL_2.0-green.svg)](https://www.eclipse.org/legal/epl-2.0/)
+> **Like `grep`, but it sees inside your jars.**
 
-`findjar` searches files on disk **and** inside jar/zip archives, with
-regex matching for file names, paths, and content. It's an improvement
-on the unix `find` command for one specific problem JVM developers hit
-constantly: locating a class or source file across a maven repo /
-classpath when it might live either directly on disk or inside a jar
-(or, with `--nested`, inside a jar inside another jar — Spring Boot
-fatjars, Bazel/Pants uberjars, shaded clients).
+[![Build](https://github.com/mbjarland/findjar/actions/workflows/ci.yml/badge.svg)](https://github.com/mbjarland/findjar/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mbjarland/findjar?label=release&color=brightgreen)](https://github.com/mbjarland/findjar/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/mbjarland/findjar/total?color=blue)](https://github.com/mbjarland/findjar/releases)
+[![License: EPL 2.0](https://img.shields.io/badge/License-EPL_2.0-green.svg)](https://www.eclipse.org/legal/epl-2.0/)
+[![Made with Clojure](https://img.shields.io/badge/Clojure-1.11-5881d8?logo=clojure)](https://clojure.org)
+[![Powered by GraalVM](https://img.shields.io/badge/Native-GraalVM_25-orange?logo=oracle)](https://www.graalvm.org)
 
-![alt text](https://raw.githubusercontent.com/mbjarland/findjar/master/doc/findjar_manifest_jdk_created_by.png)
+Search files on disk **and inside jar / zip archives** — including
+nested jars-inside-jars (Spring Boot fatjars, uberjars, shaded
+clients). Regex match on file name, path, or content. Compute hashes,
+extract manifests, dump archives, pipe to `jq` — all at **~22ms cold
+start** as a native binary.
 
-## Highlights
+---
 
-- **Searches archive interiors.** `.jar` and `.zip` are first-class. Use
-  `--nested` to also descend into jars *inside* jars.
-- **Full regex matching** for file names, paths (relative or absolute),
-  and content. Glob mode (`-G '*.clj'`) when you don't want to type
-  regex.
-- **Grep-like content search** with line numbers, intra-line ANSI
-  highlighting, and asymmetric context (`-A` / `-B` / `-x`).
-- **Cat matched files**, including jar entries, with line numbers and
-  highlighted matches.
-- **Five hash algorithms** (md5, sha1, sha256, sha512, crc32). Compute
-  several at once, or **search by hash** to find every copy of a known
-  file on your classpath.
-- **JSON output** (`--output json`) for piping into `jq` or editor
-  integrations.
-- **Smart defaults** for daily use: searches the current directory if
-  no root is given, accepts multiple roots, skips `.git`, `node_modules`,
-  `target`, `build`, etc., honors `.gitignore` and `NO_COLOR`, doesn't
-  follow symlinks unless asked.
-- **Parallel by default**, with `--parallel-jobs N` and `--no-parallel`
-  knobs for HDDs and networked filesystems. Output is byte-for-byte
-  identical to the serial path.
+## See it in 10 seconds
 
-## Installation / Building
+```text
+$ findjar ~/.m2 -n core.clj -g "Rich Hickey" -t j -x 1
+.../clojure-1.11.1.jar@clojure/set.clj 9   (ns ^{:doc "Set ops..."
+.../clojure-1.11.1.jar@clojure/set.clj:10        :author "Rich Hickey"}
+.../clojure-1.11.1.jar@clojure/set.clj 11        clojure.set)
+...
 
-Requirements:
-- Java — tested against 11, 17, and 21.
-- Clojure CLI — install instructions: <https://clojure.org/guides/install_clojure>
+$ findjar app.jar --nested -n MANIFEST.MF
+app.jar@BOOT-INF/lib/spring-core-6.1.0.jar@META-INF/MANIFEST.MF
+app.jar@BOOT-INF/lib/jackson-core-2.16.1.jar@META-INF/MANIFEST.MF
+app.jar@BOOT-INF/classes/META-INF/MANIFEST.MF
 
-Build the standalone jar:
-
-```bash
-clj -T:build uber
+$ findjar ~/.m2 --find-by-hash sha1:8b86d29c79f3d34d5dba0c50f0c8e6abf6e9b41a
+~/.m2/.../clojure-1.9.0.jar@clojure/core.clj
+~/.m2/.../clojure-1.9.0/clojure-1.9.0-sources.jar@clojure/core.clj
 ```
 
-This produces `target/findjar-<version>-standalone.jar`. Run it directly
-or alias it:
+That's the whole pitch. **Read on if any of those scratched an itch
+you've been ignoring with `for jar in $(find ...); do unzip -p ... | grep ...; done`.**
 
-```bash
-alias findjar='java -jar /path/to/findjar-<version>-standalone.jar'
-```
+---
 
-### Native binary (optional, ~30× faster startup)
+## Install
 
-For a 25–35ms cold start (vs ~750ms for the JVM jar), use a native
-binary built via GraalVM.
-
-**Quickest install — Homebrew** (macOS, Linux):
+### Homebrew (macOS, Linux) — recommended
 
 ```bash
 brew install mbjarland/findjar/findjar
 ```
 
-This pulls a prebuilt platform-native binary from the latest
-[GitHub Release][releases], plus the man page and shell completions.
+Pulls a prebuilt platform-native binary, the man page, and shell
+completions. Done in about a second.
 
-**From the GitHub Release directly**:
+### Precompiled binary
 
-Download the right archive for your platform from [Releases][releases],
-extract, and put `findjar` on `$PATH`. Platforms shipped:
+Download for your platform from
+[the latest release](https://github.com/mbjarland/findjar/releases/latest)
+and put `findjar` on `$PATH`. Available for `linux-x64`,
+`macos-arm64` (Apple Silicon; Intel macs run it via Rosetta 2),
+and `windows-x64`.
 
-  - `findjar-<v>-linux-x64.tar.gz`
-  - `findjar-<v>-macos-arm64.tar.gz` (Apple Silicon; Intel macs on
-    macOS 11+ run this transparently via Rosetta 2)
-  - `findjar-<v>-windows-x64.zip`
+### From source (any platform)
 
-[releases]: https://github.com/mbjarland/findjar/releases
+```bash
+clj -T:build uber                 # → target/findjar-<v>-standalone.jar
+java -jar target/findjar-*-standalone.jar --help
+```
 
-**Build locally**:
-
-Install Oracle GraalVM 25 (e.g. `sdk install java 25.0.3-graal`), then:
+For the ~30× faster native binary, install Oracle GraalVM 25
+(`sdk install java 25.0.3-graal`) and run:
 
 ```bash
 GRAALVM_HOME=$HOME/.sdkman/candidates/java/25.0.3-graal \
   clj -T:build native-image
 ```
 
-Produces a self-contained `target/findjar` (~34MB on macOS arm64). No
-JVM needed at runtime. The build takes ~30s. Set `GRAALVM_HOME`,
-`NATIVE_IMAGE_HOME`, or `JAVA_HOME` to your Graal install — the build
-task picks the first one that has `bin/native-image`.
+See [`doc/RELEASING.md`](doc/RELEASING.md) for the full build pipeline.
 
-To produce a release-ready archive (binary + completions + man page):
+---
 
-```bash
-clj -T:build package    # → target/findjar-<v>-<platform>.tar.gz
-```
+## Why findjar?
 
-The release pipeline at `.github/workflows/release.yml` runs this
-step on each platform's runner; see `doc/RELEASING.md` for the
-end-to-end process.
+You probably already use one of these. Here's where each falls short:
 
-### Shell completions
+| You currently use | Limitation findjar removes |
+|---|---|
+| **`grep -r`** | Can't see inside jar/zip archives. |
+| **`unzip -p` ‖ `for f in $(find ...); do …`** | Verbose, fragile, no parallelism, no nested-jar recursion. |
+| **`jar -tf` ‖ `unzip -l`** | Lists entries but can't grep their content. |
+| **`rg` (ripgrep)** | Native to text files; archive support is bolted on (and slower). |
+| **IDE search across libraries** | Locks you into the IDE; doesn't scriptable / pipeline. |
 
-`findjar` ships completion scripts for **zsh**, **bash**, and **fish**,
-embedded in the binary itself. Print one with `--completions <shell>`
-and pipe it to wherever your shell looks for completion files.
+findjar is built specifically for the JVM-developer workflow:
+*"where the heck does this class actually come from on my classpath,
+and what version is it?"*
 
-**zsh** — pick any directory on your `$fpath` (run `echo $fpath` to see):
-```bash
-mkdir -p ~/.zfunc
-findjar --completions zsh > ~/.zfunc/_findjar
-echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc
-echo 'autoload -Uz compinit && compinit' >> ~/.zshrc
-exec zsh   # or open a new terminal
-```
+---
 
-If you have Homebrew, the Homebrew-managed completion directory works
-without extra `fpath` setup:
-```bash
-findjar --completions zsh > "$(brew --prefix)/share/zsh/site-functions/_findjar"
-```
+## Highlights
 
-**bash** — `bash-completion` v2 looks under
-`~/.local/share/bash-completion/completions/` (XDG):
-```bash
-mkdir -p ~/.local/share/bash-completion/completions
-findjar --completions bash > ~/.local/share/bash-completion/completions/findjar
-```
+🔍 **Searches archive interiors** — `.jar` and `.zip` are first-class.
+`--nested` recurses into jars inside jars (uberjars, Spring Boot
+fatjars, Bazel/Pants bundles).
 
-System-wide on Linux:
-```bash
-sudo sh -c 'findjar --completions bash > /etc/bash_completion.d/findjar'
-```
+🎯 **Regex everywhere** — file name, path, content; or use globs
+(`-G '*.clj'`) when regex feels heavy. `-w` for word-boundary;
+`-v` to invert.
 
-**fish**:
-```bash
-findjar --completions fish > ~/.config/fish/completions/findjar.fish
-```
+⚡ **Grep-like content search** — line numbers, intra-line ANSI
+highlighting, asymmetric context (`-A` / `-B` / `-x`), `--count`,
+`--max-count`.
 
-Reload your shell (or `exec $SHELL`) and you can `findjar -<TAB>` to
-see flags, `findjar -t <TAB>` for type selectors, etc.
+🐚 **Shell-script friendly** — `-q` for exit-code-only; `-l` to print
+just paths (pipe to `xargs $EDITOR`); `--output json` for `jq`.
+
+🔢 **Five hash algorithms** — `md5`, `sha1`, `sha256`, `sha512`,
+`crc32`. Compute several at once, or use `--find-by-hash` to locate
+every copy of a file by its digest (great for tracking down which
+library shipped a particular class).
+
+🏎️ **Fast startup, parallel scan** — ~22ms cold start as a native
+binary; parallel by default with `--parallel-jobs N` and
+`--no-parallel` knobs. Output is byte-for-byte identical to the
+serial path.
+
+🧠 **Smart defaults** — defaults to `.` if no root given, accepts
+multiple roots, skips `.git` / `node_modules` / `target` / `build` /
+etc., honors `.gitignore` and `NO_COLOR`, doesn't follow symlinks,
+skips binary files when grepping. Override any of them with one flag.
+
+📚 **Documented** — embedded `--examples`, man page, shell
+completions for zsh / bash / fish via `findjar --completions <shell>`.
+
+---
 
 ## Usage at a glance
 
@@ -184,45 +171,90 @@ findjar . -g TODO --output json | jq -s 'group_by(.path)'
 findjar ~/.m2 ~/.gradle -g 'CVE-' --parallel-jobs 4 --no-gitignore
 ```
 
-Run `findjar --help` for the full option list and `findjar --examples`
-for a richer set of worked examples (including ANSI coloring).
+`findjar --help` for the full option list (grouped: Filtering /
+Action / Output / Scanning / Misc). `findjar --examples` for a
+richer worked set (with ANSI coloring on a TTY).
+
+---
 
 ## Output format
 
 Default text output is grep-like and stable for shell scripting:
 
-```
+```text
 <path>:<line>  <content>           # grep hit
+<path> <line>  <content>           # context line (no colon)
 <hex> <algo> <path>                # hash
 <<<<<<< <path>                     # cat block start
-1  ...content...
+   1  ...                          # cat content with line numbers
 >>>>>>>                            # cat block end
 ```
 
-JSON output (`--output json`) emits one object per line:
+JSON output (`--output json`) emits one JSON Lines (`jsonl`) record
+per call:
 
 ```json
 {"kind":"match","path":"src/foo.clj"}
 {"kind":"grep","path":"src/foo.clj","line":42,"hit?":true,"text":"...","matches":[[4,8]]}
 {"kind":"hash","path":"x.jar@y.clj","algo":"sha1","hex":"abc123..."}
+{"kind":"count","path":"src/foo.clj","count":7}
 ```
+
+Suitable for piping into `jq`, building editor integrations, or
+feeding an LLM. See `findjar --examples` for `jq` workflow snippets.
+
+---
 
 ## Defaults that just do the right thing
 
-- **No search-root → cwd.** `findjar -g foo` works.
-- **Multiple roots accepted.** Result paths include the root prefix so
-  they're unambiguous.
-- **Skipped by default**: `.git`, `.svn`, `.hg`, `.bzr`, `node_modules`,
-  `target`, `build`, `.gradle`, `.cpcache`, `.idea`, `.vscode`. Override
-  with `--all` or add specifics with repeated `--exclude NAME`.
-- **`.gitignore` honored** (best-effort: simple globs, no negation).
-  Disable with `--no-gitignore`.
-- **Symlinks not followed.** Pass `-L` / `--follow` to follow.
-- **Binary files skipped when grepping.** First 8KB sniffed for NUL
-  bytes (matches `git grep` heuristic). `--text` forces.
-- **`NO_COLOR` env var** disables ANSI coloring. `-m` does the same.
-- **Errors go to stderr**, exit non-zero. Help / version / examples go
-  to stdout, exit 0.
+| Default | Override |
+|---|---|
+| `findjar` with no root → search `.` | give one or more `<search-root>` args |
+| Multiple roots accepted | n/a |
+| Skip `.git`, `.svn`, `.hg`, `.bzr`, `node_modules`, `target`, `build`, `.gradle`, `.cpcache`, `.idea`, `.vscode` | `--all` to traverse everything; `--exclude NAME` to add to skip list |
+| Honor `.gitignore` at search-root | `--no-gitignore` |
+| **Don't** follow symlinks | `-L` / `--follow` |
+| Skip binary files when grepping (NUL-byte sniff) | `--text` |
+| Honor `NO_COLOR` env var | `-m` / `--monochrome` to disable ANSI explicitly |
+| Errors → stderr (exit non-zero); help / version → stdout (exit 0) | n/a |
+| Parallel scan (~ cores+2 workers) | `--parallel-jobs N` to cap; `--no-parallel` for serial |
+| Hash output: `<hex> <algo> <path>` so multi-algo is parseable | n/a |
+
+---
+
+## Shell completions
+
+Embedded in the binary:
+
+```bash
+findjar --completions zsh  > ~/.zfunc/_findjar
+findjar --completions bash > /etc/bash_completion.d/findjar
+findjar --completions fish > ~/.config/fish/completions/findjar.fish
+```
+
+Homebrew also installs them to `$(brew --prefix)/share/{zsh,bash,fish}-completion`
+automatically. Reload your shell, then `findjar -<TAB>` enumerates
+flags, `findjar -t <TAB>` shows type selectors (n j z), `findjar -s <TAB>`
+lists hash algorithms.
+
+For oh-my-zsh, see the install instructions in
+[`doc/INSTALL.md`](doc/INSTALL.md) (or just `findjar --examples`).
+
+---
+
+## Documentation
+
+| Doc | Topic |
+|---|---|
+| [`findjar --help`](#) | flag reference, grouped by category |
+| [`findjar --examples`](#) | worked examples for every feature |
+| [`man findjar`](#) | full man page |
+| [`CHANGELOG.md`](CHANGELOG.md) | what changed in each release |
+| [`doc/RELEASING.md`](doc/RELEASING.md) | build / release pipeline |
+| [`doc/TODO.md`](doc/TODO.md) | roadmap |
+| [`CLAUDE.md`](CLAUDE.md) | repo orientation for contributors |
+
+---
 
 ## License
 
@@ -230,4 +262,7 @@ Eclipse Public License v2.0 — see [LICENSE](LICENSE).
 
 ## Author
 
-Matias Bjarland / [mbjarland@gmail.com](mailto:mbjarland@gmail.com)
+Matias Bjarland · [mbjarland@gmail.com](mailto:mbjarland@gmail.com)
+
+If `findjar` saves you time, ⭐ the repo. Bug reports and PRs welcome
+at [github.com/mbjarland/findjar/issues](https://github.com/mbjarland/findjar/issues).
