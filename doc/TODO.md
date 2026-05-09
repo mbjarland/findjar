@@ -28,11 +28,11 @@ is making it **instant to start** and **one command to install**.
       uberjar + native binaries for `linux-x64`, `macos-arm64`, `macos-x64`,
       `windows-x64`, attaches to the GH Release. Pattern is well-known
       (used by babashka, clj-kondo). ~50 lines of YAML.
-- [x] **Bash / zsh / fish completions.** `completions/_findjar` (zsh),
-      `completions/findjar.bash`, `completions/findjar.fish`. Cover
-      every flag with appropriate value completion (algorithms, types,
-      output formats, file paths). Install per your shell's convention
-      or via Homebrew (TODO).
+- [x] **Bash / zsh / fish completions.** Embedded in the binary; users
+      get them via `findjar --completions <shell>` and pipe to the
+      right path. Source lives at `resources/findjar/completions/`.
+      Cover every flag with appropriate value completion (algorithms,
+      types, output formats, file paths).
 
 ## Tier 2 — Common grep flags users will reach for
 

@@ -229,6 +229,11 @@
       :id :nested]
 
      [nil "--examples"  "print usage examples and exit"]
+     [nil "--completions <shell>"
+      "print shell completion script (zsh|bash|fish) and exit"
+      :id :completions
+      :parse-fn keyword
+      :validate [#{:zsh :bash :fish} "must be 'zsh', 'bash', or 'fish'"]]
      [nil "--profile"   "enable tufte profiling (developer)"]
      ["-V" "--version"  "print version and exit"]
      ["-h" "--help"     "show this help and exit"]]))
@@ -243,7 +248,7 @@
    ["Output"     [:context :after :before :output :out-file :monochrome]]
    ["Scanning"   [:all :follow :max-depth :exclude :no-gitignore :text
                   :no-parallel :parallel-jobs :nested]]
-   ["Misc"       [:examples :profile :version :help]]])
+   ["Misc"       [:examples :completions :profile :version :help]]])
 
 (defn- load-resource
   "Slurp a packaged text resource. Used for help / examples text so cli.clj
@@ -405,6 +410,17 @@
 
       (:examples options)
       {:exit-message (examples options) :ok? true}
+
+      (:completions options)
+      ;; Each script lives at resources/findjar/completions/<shell>.
+      ;; Pipe to the right place per your shell:
+      ;;   zsh:  > ${fpath[1]}/_findjar
+      ;;   bash: > /etc/bash_completion.d/findjar
+      ;;   fish: > ~/.config/fish/completions/findjar.fish
+      {:exit-message (str/trimr
+                       (load-resource (str "findjar/completions/"
+                                           (name (:completions options)))))
+       :ok? true}
 
       (:help options)
       {:exit-message (usage summary) :ok? true}

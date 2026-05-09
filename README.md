@@ -79,8 +79,44 @@ and windows-x64 in one tag-driven release pipeline. See `doc/TODO.md`.
 
 ### Shell completions
 
-`completions/_findjar` (zsh), `completions/findjar.bash`,
-`completions/findjar.fish`. Install per your shell's convention.
+`findjar` ships completion scripts for **zsh**, **bash**, and **fish**,
+embedded in the binary itself. Print one with `--completions <shell>`
+and pipe it to wherever your shell looks for completion files.
+
+**zsh** — pick any directory on your `$fpath` (run `echo $fpath` to see):
+```bash
+mkdir -p ~/.zfunc
+findjar --completions zsh > ~/.zfunc/_findjar
+echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc
+echo 'autoload -Uz compinit && compinit' >> ~/.zshrc
+exec zsh   # or open a new terminal
+```
+
+If you have Homebrew, the Homebrew-managed completion directory works
+without extra `fpath` setup:
+```bash
+findjar --completions zsh > "$(brew --prefix)/share/zsh/site-functions/_findjar"
+```
+
+**bash** — `bash-completion` v2 looks under
+`~/.local/share/bash-completion/completions/` (XDG):
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+findjar --completions bash > ~/.local/share/bash-completion/completions/findjar
+```
+
+System-wide on Linux:
+```bash
+sudo sh -c 'findjar --completions bash > /etc/bash_completion.d/findjar'
+```
+
+**fish**:
+```bash
+findjar --completions fish > ~/.config/fish/completions/findjar.fish
+```
+
+Reload your shell (or `exec $SHELL`) and you can `findjar -<TAB>` to
+see flags, `findjar -t <TAB>` for type selectors, etc.
 
 ## Usage at a glance
 

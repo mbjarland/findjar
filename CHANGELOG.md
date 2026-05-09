@@ -9,6 +9,16 @@ build numbers.
 
 ### Added (post-merge to master)
 
+- **`findjar --completions <shell>`** prints a shell completion script
+  (zsh, bash, or fish) to stdout. Embedded in the binary so users
+  installing a single-file native binary have everything they need:
+  ```
+  findjar --completions zsh  > ~/.zfunc/_findjar          # zsh
+  findjar --completions bash > /etc/bash_completion.d/findjar
+  findjar --completions fish > ~/.config/fish/completions/findjar.fish
+  ```
+  Source files live in `resources/findjar/completions/`.
+
 - **Common grep flags** users reach for from muscle memory:
   - **`-v` / `--invert-match`** — emit lines that do NOT match.
   - **`-w` / `--word-regexp`** — wrap the grep pattern in `\b…\b` for
