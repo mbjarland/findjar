@@ -78,30 +78,26 @@ release: ~2–3 minutes.
 
 ### 2. Update the Homebrew formula
 
-Once the release is published, grab the SHA-256 sums from the release
-page (`SHASUMS256.txt`) and update `Formula/findjar.rb`:
-
-```ruby
-version  "1.0.130"
-
-on_macos do
-  on_arm do
-    url    "...findjar-1.0.130-macos-arm64.tar.gz"
-    sha256 "abcd..."   # from SHASUMS256.txt
-  end
-  ...
-end
-```
-
-Then push to the tap repo:
+`scripts/bump-formula.sh` automates the version + sha256 patches. It
+downloads `SHASUMS256.txt` from the matching release and updates
+`Formula/findjar.rb` in place:
 
 ```bash
-cd ~/projects/homebrew-findjar
-cp ~/projects/clojure/findjar/Formula/findjar.rb Formula/
-git add Formula/findjar.rb
-git commit -m "findjar 1.0.130"
-git push
+scripts/bump-formula.sh 1.0.131
 ```
+
+Review the diff (`git diff Formula/findjar.rb`), then ship it to your
+tap repo:
+
+```bash
+cp Formula/findjar.rb ~/projects/homebrew-findjar/Formula/
+git -C ~/projects/homebrew-findjar add Formula/findjar.rb
+git -C ~/projects/homebrew-findjar commit -m "findjar 1.0.131"
+git -C ~/projects/homebrew-findjar push
+```
+
+If the script fails ("release does not exist yet"), wait for the
+release workflow to publish the GH Release first.
 
 ### 3. (optional) Verify
 
