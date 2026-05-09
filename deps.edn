@@ -1,8 +1,12 @@
 {:paths   ["src" "resources"]
- :deps    {org.clojure/clojure   {:mvn/version "1.11.1"}
+ :deps    {org.clojure/clojure   {:mvn/version "1.12.0"}
            org.clojure/tools.cli {:mvn/version "1.0.219"}
            jansi-clj/jansi-clj   {:mvn/version "1.0.1"}
-           com.taoensso/tufte    {:mvn/version "2.6.1"}}
+           com.taoensso/tufte    {:mvn/version "2.6.1"}
+           ;; clojure.asm (bundled with Clojure) lags behind newer Java
+           ;; class-file versions; ASM 9.7+ reads Java 23 class files.
+           ;; Used only by --class-info.
+           org.ow2.asm/asm       {:mvn/version "9.7.1"}}
 
  :aliases {;; run with clj -T:build function-in-build-dot-clj, e.g. clj -T:build uber
            :build {:deps       {io.github.clojure/tools.build {:git/tag "v0.9.5" :git/sha "24f2894"}}

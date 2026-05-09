@@ -21,13 +21,22 @@
     (is (= 2 (count search-roots)))
     (is (= ["/tmp" "/var"] (mapv #(.getPath ^java.io.File %) search-roots)))))
 
-(deftest non-directory-fails
+(deftest nonexistent-root-fails
   (let [r (parsed "/this/path/does/not/exist/probably")]
-    (is (str/includes? (:exit-message r) "non-directory search root"))))
+    (is (str/includes? (:exit-message r) "search root not found"))))
+
+(deftest file-search-root-accepted
+  ;; A file search-root is now allowed (e.g. 'findjar app.jar --manifest').
+  ;; The walker handles single-file roots.
+  (let [tmp (java.io.File/createTempFile "findjar-root-test-" ".jar")
+        {:keys [search-roots exit-message]} (parsed (.getPath tmp))]
+    (.deleteOnExit tmp)
+    (is (nil? exit-message))
+    (is (= 1 (count search-roots)))))
 
 (deftest some-bad-roots-fails-with-list
   (let [r (parsed "/tmp" "/this/does/not/exist" "/var")]
-    (is (str/includes? (:exit-message r) "non-directory"))
+    (is (str/includes? (:exit-message r) "search root not found"))
     (is (str/includes? (:exit-message r) "this/does/not/exist"))))
 
 (deftest path-and-apath-mutually-exclusive

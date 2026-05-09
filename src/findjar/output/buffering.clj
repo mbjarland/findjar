@@ -30,6 +30,8 @@
     (.add calls [:grep-match max-line-# line-map opts]))
   (grep-count [_ path n opts]
     (.add calls [:grep-count path n opts]))
+  (class-info [_ path info opts]
+    (.add calls [:class-info path info opts]))
   (dump-stream [_ path materialized opts]
     (.add calls [:dump-stream path materialized opts]))
   (print-hash [_ path hash-type hash-value opts]
@@ -56,6 +58,7 @@
       :match       (apply p/match       output args)
       :grep-match  (apply p/grep-match  output args)
       :grep-count  (apply p/grep-count  output args)
+      :class-info  (apply p/class-info  output args)
       :dump-stream (apply p/dump-stream output args)
       :print-hash  (apply p/print-hash  output args))))
 

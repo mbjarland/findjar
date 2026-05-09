@@ -4,10 +4,10 @@
             [clojure.string :as str]
             [findjar.hash :as hash]
             [findjar.protocols :as p])
-  (:import [java.io File InputStream]
+  (:import [java.io BufferedInputStream ByteArrayInputStream File InputStream]
            [java.nio.file Files LinkOption]
            [java.util.regex Pattern]
-           [java.util.zip ZipEntry ZipFile ZipInputStream]))
+           [java.util.zip GZIPInputStream ZipEntry ZipFile ZipInputStream]))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Stream helpers — replace the old FileContent protocol.
@@ -208,6 +208,64 @@
     (with-reader output opts stream-factory
       (fn [reader] (some hit? (line-seq reader))))))
 
+;; The same access bits mean different things on classes vs methods —
+;; bit 0x0020 is ACC_SUPER on a class (legacy / universal, not useful
+;; to surface) but ACC_SYNCHRONIZED on a method. Two separate maps:
+
+(def ^:private class-access-flags
+  {0x0001 :public      0x0010 :final      0x0200 :interface
+   0x0400 :abstract    0x2000 :annotation 0x4000 :enum})
+
+(def ^:private method-access-flags
+  {0x0001 :public      0x0002 :private    0x0004 :protected
+   0x0008 :static      0x0010 :final      0x0020 :synchronized
+   0x0100 :native      0x0400 :abstract   0x0800 :strict})
+
+(defn- bits->kws [flags ^long acc]
+  (into (sorted-set)
+        (keep (fn [[^long bit kw]] (when (pos? (bit-and acc bit)) kw)))
+        flags))
+
+(defn- class-access->kws  [^long acc] (bits->kws class-access-flags  acc))
+(defn- method-access->kws [^long acc] (bits->kws method-access-flags acc))
+
+(defn class-info-from-bytes
+  "Parse .class bytes via ASM and return a map describing the class.
+  Returns nil if the bytes don't look like a valid class file. Uses the
+  org.objectweb.asm dep rather than clojure.asm because the bundled
+  Clojure ASM lags behind newer Java class-file versions."
+  [^bytes bs]
+  (try
+    (let [reader  (org.objectweb.asm.ClassReader. bs)
+          class-name (atom nil)
+          super      (atom nil)
+          ifaces     (atom [])
+          c-access   (atom 0)
+          methods    (atom [])
+          ;; ASM9 covers Java 21+ classfile features. We SKIP_CODE so
+          ;; method bodies are never parsed, which keeps this fast even
+          ;; on huge classes.
+          visitor
+          (proxy [org.objectweb.asm.ClassVisitor] [org.objectweb.asm.Opcodes/ASM9]
+            (visit [_version access nm _sig superName interfaces]
+              (reset! class-name nm)
+              (reset! super     superName)
+              (reset! ifaces    (vec interfaces))
+              (reset! c-access  access))
+            (visitMethod [access nm desc _sig _exceptions]
+              (swap! methods conj
+                     {:name nm :desc desc :access (method-access->kws access)})
+              nil))]
+      (.accept reader visitor (int (bit-or org.objectweb.asm.ClassReader/SKIP_CODE
+                                            org.objectweb.asm.ClassReader/SKIP_DEBUG
+                                            org.objectweb.asm.ClassReader/SKIP_FRAMES)))
+      {:name       @class-name
+       :super      @super
+       :interfaces @ifaces
+       :access     (class-access->kws @c-access)
+       :methods    @methods})
+    (catch Throwable _ nil)))
+
 (defn binary-stream?
   "Return true if the first 8KB of the stream contains a NUL byte. Mirrors
   the heuristic used by GNU grep / ripgrep / git for detecting binary data.
@@ -258,6 +316,26 @@
 ;;;; This lets buffering outputs materialize content while the source jar is
 ;;;; still open, while keeping ANSI/formatting concerns out of core.
 
+(defn- handle-class-info
+  "Read the entry's bytes, parse via clojure.asm, and emit class-info."
+  [output opts file-path stream-factory]
+  (when (.endsWith ^String file-path ".class")
+    (when-let [bytes (with-stream output opts stream-factory
+                       (fn [^InputStream s]
+                         (let [baos (java.io.ByteArrayOutputStream.)]
+                           (jio/copy s baos)
+                           (.toByteArray baos))))]
+      (when-let [info (class-info-from-bytes bytes)]
+        (p/class-info output file-path info opts)))))
+
+(defn- manifest-entry?
+  "True if file-path looks like a MANIFEST.MF or a Maven pom.properties."
+  [^String file-path]
+  (or (.endsWith file-path "/MANIFEST.MF")
+      (.endsWith file-path "@MANIFEST.MF")
+      (= file-path "MANIFEST.MF")
+      (.endsWith file-path "pom.properties")))
+
 (defn- handle-find-by-hash
   "If --find-by-hash specs are set, hash the file and emit a :match for
   every spec that matches. Returns true if find-by-hash was attempted (i.e.
@@ -286,15 +364,30 @@
         path-pat    (:path opts)
         apath-pat   (:apath opts)
         cat?        (:cat opts)
+        class-info? (:class-info opts)
+        manifest?   (:manifest opts)
         files-only? (:files-only opts)
         hash-types  (:hash opts)
         find-hash   (:find-by-hash opts)
         text?       (:text opts)
-        macro-op    (or cat? hash-types find-hash)]
+        macro-op    (or cat? hash-types find-hash class-info? manifest?)]
     (cond
       (and name-pat  (not (re-find name-pat  file-name))) nil
       (and path-pat  (not (re-find path-pat  file-path))) nil
       (and apath-pat (not (re-find apath-pat file-path))) nil
+
+      ;; --class-info: parse .class entries, ignore other entries silently.
+      class-info?
+      (handle-class-info output opts file-path stream-factory)
+
+      ;; --manifest: cat MANIFEST.MF / pom.properties entries; ignore
+      ;; everything else. Only meaningful for jar/zip entries (paths
+      ;; with @-separators), but also works on a bare META-INF/...
+      ;; file on disk for the rare power-user invocation.
+      manifest?
+      (when (manifest-entry? file-path)
+        (when-let [s (render-cat output file-path stream-factory opts)]
+          (p/dump-stream output file-path s opts)))
 
       ;; --find-by-hash short-circuits everything else: hash and emit on match.
       find-hash (handle-find-by-hash output opts file-path stream-factory find-hash)
@@ -319,6 +412,115 @@
       (when (stream-line-matches? output opts stream-factory grep-pat)
         (p/match output file-path opts))
       grep-pat   (grep-stream output file-path stream-factory opts))))
+
+;;;; ---------------------------------------------------------------------------
+;;;; Tar reader — minimal (USTAR / GNU "L" long-name) header parser. We
+;;;; don't pull in commons-compress; for findjar's read-only use case the
+;;;; ~80 lines below cover the formats people actually encounter.
+
+(defn- tar-string
+  "Read a NUL-terminated ASCII string from a fixed-width header field."
+  [^bytes hdr ^long off ^long len]
+  (let [end (loop [i off]
+              (cond
+                (= i (+ off len))         (+ off len)
+                (zero? (aget hdr i))      i
+                :else                     (recur (inc i))))]
+    (String. hdr (int off) (int (- end off)) "UTF-8")))
+
+(defn- tar-octal ^long [^bytes hdr ^long off ^long len]
+  (let [s (tar-string hdr off len)
+        s (str/trim s)]
+    (if (str/blank? s) 0 (Long/parseLong s 8))))
+
+(defn- read-fully
+  "Read exactly n bytes from in. Returns the byte[] or nil at EOF."
+  [^InputStream in n]
+  (let [buf (byte-array n)]
+    (loop [off 0]
+      (cond
+        (= off n) buf
+        :else
+        (let [r (.read in buf off (- n off))]
+          (cond
+            (neg? r) (when (pos? off) buf)   ; partial: rare for tar headers
+            :else    (recur (+ off r))))))))
+
+(defn- skip-fully [^InputStream in ^long n]
+  (loop [left n]
+    (when (pos? left)
+      (let [s (.skip in left)]
+        (cond
+          (zero? s) (when (neg? (.read in)) :eof)   ; EOF mid-skip
+          :else     (recur (- left s)))))))
+
+(defn- scan-tar-stream
+  "Walk a tar archive's entries via InputStream. Each non-empty regular
+   file produces a (handle-match ...) call with the content available via
+   a stream-factory backed by an in-memory byte[]."
+  [^InputStream in ^String prefix opts output render-cat]
+  (let [pending-long-name (atom nil)]
+    (loop [empty-blocks 0]
+      (let [hdr (read-fully in 512)]
+        (cond
+          (nil? hdr) nil
+          ;; Tar end-of-archive marker is two consecutive zero blocks.
+          (every? zero? hdr)
+          (when (zero? empty-blocks) (recur 1))
+
+          :else
+          (let [name      (or @pending-long-name (tar-string hdr 0 100))
+                size      (tar-octal hdr 124 12)
+                typeflag  (char (aget hdr 156))
+                blocks    (long (Math/ceil (/ (double size) 512.0)))
+                pad-bytes (- (* blocks 512) size)]
+            (reset! pending-long-name nil)
+            (case typeflag
+              ;; Regular file (or '\0' which is the legacy encoding).
+              (\0 \space)
+              (let [bytes (if (pos? size) (read-fully in size) (byte-array 0))
+                    _     (when (pos? pad-bytes) (skip-fully in pad-bytes))
+                    full-path (str prefix name)
+                    entry-name (name-part name)
+                    sf    #(ByteArrayInputStream. bytes)]
+                (handle-match output opts entry-name full-path sf render-cat)
+                (recur 0))
+
+              ;; GNU long-name extension: payload is the next entry's
+              ;; full name. Cache and keep going.
+              \L
+              (let [payload (read-fully in size)
+                    _       (when (pos? pad-bytes) (skip-fully in pad-bytes))
+                    n       (str/replace (String. ^bytes payload "UTF-8")
+                                          #" +$" "")]
+                (reset! pending-long-name n)
+                (recur 0))
+
+              ;; Anything else (directory, symlink, etc.) — skip the
+              ;; payload and move on.
+              (do
+                (when (pos? size) (skip-fully in (+ size pad-bytes)))
+                (recur 0)))))))))
+
+(defn- tar-input-stream ^InputStream [^File f gzipped?]
+  (let [^InputStream raw (BufferedInputStream. (jio/input-stream f))]
+    (if gzipped? (GZIPInputStream. raw) raw)))
+
+(defn- scan-tar
+  "Open a .tar / .tar.gz / .tgz file and walk its entries."
+  [^File tar ^String tar-path opts output render-cat]
+  (let [n        (str/lower-case (.getName tar))
+        gzipped? (or (.endsWith n ".gz") (.endsWith n ".tgz"))
+        prefix   (str (str/trim tar-path) \@)]
+    (try
+      (with-open [^InputStream in (tar-input-stream tar gzipped?)]
+        (scan-tar-stream in prefix opts output render-cat))
+      (catch Exception e
+        (p/warn output
+                (str (.getSimpleName (class e)) " opening " (.getPath tar)
+                     " - " (.getMessage e))
+                e
+                opts)))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; File-type registry — replaces defmulti file-finder
@@ -346,14 +548,35 @@
                         (scan-jar f path opts output render-cat))
              :desc    "files in zip files"
              :default false
-             :char    \z}})
+             :char    \z}
+   "tar"    {:scan    (fn [f path opts output render-cat]
+                        (scan-tar f path opts output render-cat))
+             :desc    "files in tar / tar.gz / tgz archives"
+             :default false
+             :char    \t}})
+
+(defn- tar-extension?
+  "True if name has a multi-part tar extension (.tar.gz, .tar.bz2, etc.).
+   The single-extension '.tar' is already covered by file-ext."
+  [^String name]
+  (let [n (str/lower-case name)]
+    (or (.endsWith n ".tar.gz") (.endsWith n ".tgz"))))
+
+(defn- effective-ext
+  "Like file-ext but recognizes multi-part tar extensions, mapping them
+   all to the canonical 'tar' file-finder key."
+  [^File f]
+  (let [n (.getName f)]
+    (cond
+      (tar-extension? n) "tar"
+      :else              (file-ext f))))
 
 (defn- finder-for
   "Pick a file-finder entry for f given the active set of types. Assumes f
   has already passed valid-file-fn — by construction either the ext is in
   types and registered, or :default is in types and we fall through."
   [^File f types]
-  (or (when-let [ext (file-ext f)]
+  (or (when-let [ext (effective-ext f)]
         (when (contains? types ext)
           (file-finders ext)))
       (file-finders :default)))
@@ -458,7 +681,7 @@
       (and (.isFile f)
            (boolean
              (or (active-types :default)
-                 (contains? active-exts (file-ext f))))))))
+                 (contains? active-exts (effective-ext f))))))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Top-level scan
@@ -475,12 +698,19 @@
 
 (defn- relative-path
   "Convert an absolute File path to one relative to search-root. Tolerates
-  trailing separators on search-root."
+  trailing separators on search-root. When f IS the search-root (e.g.
+  'findjar app.jar --manifest' with a file-as-root), returns the
+  basename."
   [^File search-root]
   (let [root (.getPath search-root)
         len  (cond-> (count root)
                (not (str/ends-with? root File/separator)) inc)]
-    (fn [^File f] (subs (.getPath f) len))))
+    (fn [^File f]
+      (let [p (.getPath f)]
+        (cond
+          (= p root)        (.getName f)
+          (< (count p) len) (.getName f)
+          :else             (subs p len))))))
 
 (defn path-fn
   "Return a fn File -> String producing the path representation chosen by
@@ -497,53 +727,84 @@
     :else                 (relative-path search-root)))
 
 ;;;; ---------------------------------------------------------------------------
-;;;; .gitignore — minimal best-effort matcher.
-;;;; Supports comments (#), blank lines, * and ? wildcards, and trailing-slash
-;;;; directory hints. Patterns containing '/' are anchored to the search-root,
-;;;; otherwise they match at any depth. Negation (!pattern) is intentionally
-;;;; ignored; if you need full git fidelity, run findjar inside a directory
-;;;; you've already pruned, or pass --no-gitignore.
+;;;; .gitignore — best-effort matcher.
+;;;;
+;;;; Supports:
+;;;;   - comments (#) and blank lines
+;;;;   - * and ? wildcards (not globstar **)
+;;;;   - trailing-slash directory hint (stripped; we ignore dir-only-ness)
+;;;;   - negation (!pattern) with last-match-wins semantics
+;;;;   - anchoring: patterns containing '/' anchor to the matcher's root
+;;;;     directory; bare patterns match at any depth
+;;;;
+;;;; Patterns are kept in input order so a later !rule can re-include a
+;;;; previously-excluded path, just like git.
 
-(defn- gitignore-line->regex [^String pat]
-  (when-not (or (str/blank? pat) (.startsWith pat "#") (.startsWith pat "!"))
-    (let [pat        (cond-> pat (.endsWith pat "/")  (subs 0 (dec (count pat))))
-          anchored?  (or (.startsWith pat "/") (.contains pat "/"))
-          pat        (cond-> pat (.startsWith pat "/") (subs 1))
-          sb         (StringBuilder. (if anchored? "^" "(?:^|.*/)"))]
-      (loop [i 0]
-        (when (< i (count pat))
-          (let [c (.charAt pat i)]
-            (case c
-              \* (.append sb "[^/]*")
-              \? (.append sb "[^/]")
-              \. (.append sb "\\.")
-              \\ (.append sb "\\\\")
-              \( (.append sb "\\(")
-              \) (.append sb "\\)")
-              \+ (.append sb "\\+")
-              \^ (.append sb "\\^")
-              \$ (.append sb "\\$")
-              \{ (.append sb "\\{")
-              \} (.append sb "\\}")
-              \| (.append sb "\\|")
-              (.append sb c))
-            (recur (inc i)))))
-      (.append sb "(?:/.*)?$")
-      (Pattern/compile (.toString sb)))))
+(defn- compile-gitignore-pattern
+  "Translate one non-comment, non-blank line into a regex matching paths
+  relative to the .gitignore's directory."
+  [^String pat]
+  (let [pat       (cond-> pat (.endsWith pat "/")  (subs 0 (dec (count pat))))
+        anchored? (or (.startsWith pat "/") (.contains pat "/"))
+        pat       (cond-> pat (.startsWith pat "/") (subs 1))
+        sb        (StringBuilder. (if anchored? "^" "(?:^|.*/)"))]
+    (loop [i 0]
+      (when (< i (count pat))
+        (let [c (.charAt pat i)]
+          (case c
+            \* (.append sb "[^/]*")
+            \? (.append sb "[^/]")
+            \. (.append sb "\\.")
+            \\ (.append sb "\\\\")
+            \( (.append sb "\\(")
+            \) (.append sb "\\)")
+            \+ (.append sb "\\+")
+            \^ (.append sb "\\^")
+            \$ (.append sb "\\$")
+            \{ (.append sb "\\{")
+            \} (.append sb "\\}")
+            \| (.append sb "\\|")
+            (.append sb c))
+          (recur (inc i)))))
+    (.append sb "(?:/.*)?$")
+    (Pattern/compile (.toString sb))))
+
+(defn- parse-gitignore-line
+  "Parse one line of a .gitignore. Returns {:re Pattern :negate? bool} or
+  nil for comments / blanks."
+  [^String line]
+  (let [line (str/trim line)]
+    (cond
+      (or (str/blank? line) (.startsWith line "#")) nil
+      (.startsWith line "!") {:re (compile-gitignore-pattern (subs line 1))
+                              :negate? true}
+      :else                  {:re (compile-gitignore-pattern line)
+                              :negate? false})))
 
 (defn- gitignore-matcher
   "Return (fn [rel-path] -> bool) telling whether rel-path is ignored by
-  the .gitignore at root, or nil if no .gitignore (or --no-gitignore)."
+  the .gitignore at root, or nil if no .gitignore (or --no-gitignore).
+  Implements last-match-wins so a later !rule re-includes the path."
   [^File root opts]
   (when-not (:no-gitignore opts)
     (let [gi (jio/file root ".gitignore")]
       (when (.isFile gi)
-        (let [patterns (->> (str/split-lines (slurp gi))
-                            (map str/trim)
-                            (keep gitignore-line->regex))]
-          (when (seq patterns)
+        (let [rules (->> (str/split-lines (slurp gi))
+                         (keep parse-gitignore-line)
+                         vec)]
+          (when (seq rules)
             (fn [rel-path]
-              (boolean (some #(re-find % rel-path) patterns)))))))))
+              (loop [i      0
+                     ignore false]
+                (if (>= i (count rules))
+                  ignore
+                  (let [{:keys [re negate?]} (rules i)
+                        m (boolean (re-find re rel-path))]
+                    (recur (inc i)
+                           (cond
+                             (and m negate?)       false
+                             (and m (not negate?)) true
+                             :else                 ignore))))))))))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Walker
@@ -551,12 +812,33 @@
 (defn- symlink? [^File f]
   (Files/isSymbolicLink (.toPath f)))
 
+(defn- subpath-from
+  "Return the path of file relative to ancestor-dir, with forward slashes,
+  or nil if file isn't under ancestor-dir."
+  [^File ancestor-dir ^File file]
+  (let [a (.getPath ancestor-dir)
+        f (.getPath file)]
+    (when (and (.startsWith f a) (> (count f) (count a)))
+      (let [tail (subs f (count a))]
+        (cond-> tail (.startsWith tail File/separator) (subs 1))))))
+
+(defn- any-rule-ignores?
+  "True if any (matcher, dir) pair in the stack would ignore the file
+  under that dir. Each matcher tests a path relative to ITS dir."
+  [stack ^File file]
+  (boolean
+    (some (fn [{:keys [matcher dir]}]
+            (when-let [rel (subpath-from dir file)]
+              (matcher rel)))
+          stack)))
+
 (defn- walk-tree
   "Custom recursive walker producing a lazy seq of files under root, applying:
    - --max-depth (1 = direct children, omit/nil = unlimited)
    - --exclude + default-excluded-dirs (unless :all)
    - --follow (default: skip symlinks)
-   - .gitignore matching (unless :no-gitignore)
+   - .gitignore matching (unless :no-gitignore), recursively: a .gitignore
+     in any descendant directory contributes patterns for that subtree
   Only files are emitted; directories are pruned-or-descended. The root
   itself is always traversed even if its name would otherwise be excluded."
   [^File root opts]
@@ -564,29 +846,37 @@
         max-depth  (:max-depth opts)
         excluded   (cond-> (or (:exclude opts) #{})
                      (not (:all opts)) (set/union default-excluded-dirs))
-        gi-match?  (or (gitignore-matcher root opts) (constantly false))
-        to-rel     (relative-path root)
         within?    (fn [d] (or (nil? max-depth) (<= d max-depth)))
         descend?   (fn [d] (or (nil? max-depth) (< d max-depth)))
-        skip?      (fn [^File f]
+        ;; Each entry in the matcher stack is {:matcher fn :dir File}.
+        ;; The matcher tests a path relative to its dir. Pushed on
+        ;; descent, popped when the lazy seq leaves a subtree.
+        push-here  (fn [stack ^File d]
+                     (if-let [m (gitignore-matcher d opts)]
+                       (conj stack {:matcher m :dir d})
+                       stack))
+        skip-file? (fn [stack ^File f]
                      (or (and (not follow?) (symlink? f))
-                         (gi-match? (to-rel f))))
-        prune-dir? (fn [^File d]
+                         (any-rule-ignores? stack f)))
+        prune-dir? (fn [stack ^File d]
                      (or (contains? excluded (.getName d))
-                         (skip? d)))
-        step (fn step [^File f depth]
+                         (and (not follow?) (symlink? d))
+                         (any-rule-ignores? stack d)))
+        step (fn step [stack ^File f depth]
                (lazy-seq
                  (cond
                    (.isFile f)
-                   (when (and (within? depth) (not (skip? f))) [f])
+                   (when (and (within? depth) (not (skip-file? stack f))) [f])
 
                    (.isDirectory f)
-                   (when (and (descend? depth) (not (prune-dir? f)))
-                     (mapcat #(step % (inc depth)) (.listFiles f)))
+                   (when (and (descend? depth) (not (prune-dir? stack f)))
+                     (let [stack' (push-here stack f)]
+                       (mapcat #(step stack' % (inc depth)) (.listFiles f))))
 
-                   :else nil)))]
+                   :else nil)))
+        root-stack (push-here [] root)]
     (if (.isDirectory root)
-      (mapcat #(step % 1) (.listFiles root))
+      (mapcat #(step root-stack % 1) (.listFiles root))
       [root])))
 
 (defn candidate-files

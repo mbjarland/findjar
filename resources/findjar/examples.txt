@@ -133,11 +133,58 @@ Examples:
 
  11. By default findjar skips .git, node_modules, target, build,
      .gradle, .cpcache, .idea, .vscode, .svn, .hg, plus anything in
-     .gitignore at each search-root. Three knobs to override:
+     .gitignore at each search-root (recursively — child .gitignore
+     files contribute patterns for their subtree, and !pattern lines
+     re-include previously-excluded files):
 
      @|bold ~> findjar . -g build-version --all|@                   # walk everything
      @|bold ~> findjar . -g build-version --no-gitignore|@          # ignore .gitignore only
      @|bold ~> findjar . -g build-version --exclude dist --exclude out|@
+
+ 11a. --manifest dumps every matched jar's META-INF/MANIFEST.MF and
+      pom.properties without you having to know the path. Useful for
+      auditing dependencies of fatjars:
+
+     @|bold ~> findjar app.jar --manifest|@
+
+     <<<<<<< app.jar@META-INF/MANIFEST.MF
+        1 Manifest-Version: 1.0
+        2 Main-Class: com.example.Main
+     >>>>>>>
+
+     @|bold ~> findjar ~/.m2 --nested --manifest -g log4j -l|@
+     # → list every fat jar that bundles a log4j-derived dependency
+
+ 11b. --class-info parses .class entries via ASM and prints their
+      structure. Combine with -t j --nested to crawl uberjars and
+      see what each class implements:
+
+     @|bold ~> findjar ~/.m2 -n DataSourceConfig.class --class-info -t j|@
+
+     <<<<<<< .../spring-jdbc-6.1.0.jar@.../DataSourceConfig.class
+     class:      org.springframework.jdbc.config.DataSourceConfig
+     access:     public, final
+     extends:    java.lang.Object
+     implements: java.io.Serializable
+     methods:
+       public <init>()V
+       public getUrl()Ljava/lang/String;
+       ...
+     >>>>>>>
+
+     With --output json the same call emits structured records you
+     can pipe to jq, e.g. to list every class that implements a
+     specific interface:
+
+     @|bold ~> findjar ~/.m2 -t j --class-info --output json | \
+                jq 'select(.interfaces|index("java/io/Serializable"))|.name'|@
+
+ 11c. tar / tar.gz / tgz support (-t t). Like jar/zip, entries appear
+      with the @-separator:
+
+     @|bold ~> findjar /usr/local/share -t t -n README|@
+     /usr/local/share/.../something.tar.gz@README.md
+     ...
 
  12. Symbolic links are NOT followed by default (a common cause of
      runaway scans). Pass -L to follow:

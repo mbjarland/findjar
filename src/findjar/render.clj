@@ -94,6 +94,43 @@
 ;;;; ---------------------------------------------------------------------------
 ;;;; Grep line
 
+(defn- jvm-name->dots
+  "Translate JVM internal names (java/lang/String) to source-style
+  (java.lang.String). Returns '?' for nil."
+  [s]
+  (if s (str/replace s "/" ".") "?"))
+
+(defn format-class-info
+  "Pretty-print a class-info map as a multi-line block:
+
+      <<<<<<< <path>
+      class:      com.example.Foo
+      access:     public, final
+      extends:    com.example.Bar
+      implements: java.io.Serializable
+      methods:
+        public <init>()V
+        public String hello(int)
+      >>>>>>>"
+  [path {:keys [name super interfaces access methods]}]
+  (let [join-sym (fn [coll] (str/join ", " (map clojure.core/name coll)))]
+    (str/join
+      \newline
+      (concat
+        [(str (style red "<<<<<<<") " " path)
+         (str "class:      " (jvm-name->dots name))]
+        (when (seq access)
+          [(str "access:     " (join-sym access))])
+        [(str "extends:    " (jvm-name->dots super))]
+        (when (seq interfaces)
+          [(str "implements: " (str/join ", " (map jvm-name->dots interfaces)))])
+        ["methods:"]
+        (for [{:keys [name desc access]} methods]
+          (str "  "
+               (cond-> "" (seq access) (str (join-sym access) " "))
+               name desc))
+        [(style red ">>>>>>>")]))))
+
 (defn format-grep-line [max-line-# {:keys [path line-# hit? line match-idxs]} opts]
   ;; Padding intentionally matches master's output verbatim: bare display
   ;; number, then (inc (- width len)) trailing spaces. Users may have

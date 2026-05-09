@@ -11,6 +11,7 @@
         (match       [_ path opts]              (swap! calls conj [:match path opts]))
         (grep-match  [_ max-line-# m opts]      (swap! calls conj [:grep max-line-# m opts]))
         (grep-count  [_ path n opts]            (swap! calls conj [:count path n opts]))
+        (class-info  [_ path info opts]         (swap! calls conj [:class-info path info opts]))
         (dump-stream [_ path materialized opts] (swap! calls conj [:dump path materialized opts]))
         (print-hash  [_ path htype hval opts]   (swap! calls conj [:hash path htype hval opts])))
       {::calls calls})))

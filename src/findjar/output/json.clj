@@ -39,7 +39,8 @@
                                                 (write-value val))))
                                     (clojure.string/join ","))
                                "}")
-    (sequential? v)       (str "["
+    (or (sequential? v) (set? v))
+                          (str "["
                                (clojure.string/join "," (map write-value v))
                                "]")
     :else                 (escape-string (str v))))
@@ -68,6 +69,8 @@
                     (assoc :matches (mapv (juxt :start :end) match-idxs)))))
     (grep-count [_ path n _opts]
       (emit-line! {:kind "count" :path path :count n}))
+    (class-info [_ path info _opts]
+      (emit-line! (assoc info :kind "class-info" :path path)))
     (dump-stream [_ path materialized _opts]
       (emit-line! {:kind "cat" :path path :content materialized}))
     (print-hash [_ path hash-type hash-value _opts]

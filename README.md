@@ -119,6 +119,17 @@ just paths (pipe to `xargs $EDITOR`); `--output json` for `jq`.
 every copy of a file by its digest (great for tracking down which
 library shipped a particular class).
 
+📦 **Beyond jar/zip** — also reads inside `.tar`, `.tar.gz`, `.tgz`
+archives (`-t t`).
+
+📜 **`--manifest`** — for each matched jar, dump `META-INF/MANIFEST.MF`
+and any `pom.properties` without you having to know the exact path.
+
+☕ **`--class-info`** — parse `.class` entries via ASM and print the
+class name, access modifiers, super, interfaces, and method
+signatures. Combines with `--output json` for *"list every class that
+implements Serializable"* pipelines.
+
 🏎️ **Fast startup, parallel scan** — ~22ms cold start as a native
 binary; parallel by default with `--parallel-jobs N` and
 `--no-parallel` knobs. Output is byte-for-byte identical to the

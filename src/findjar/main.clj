@@ -41,6 +41,10 @@
     (grep-count [_ path n _opts]
       (println (str path ":" n)))
 
+    (class-info [_ path info opts]
+      (binding [r/*use-colors* (r/use-colors? opts)]
+        (println (r/format-class-info path info))))
+
     (dump-stream [_ path materialized opts]
       (when materialized
         (if-let [^File of (:out-file opts)]
@@ -69,6 +73,7 @@
         (match       [_ _ _]     (reset! matched? true))
         (grep-match  [_ _ _ _]   (reset! matched? true))
         (grep-count  [_ _ _ _]   (reset! matched? true))
+        (class-info  [_ _ _ _]   (reset! matched? true))
         (dump-stream [_ _ _ _]   (reset! matched? true))
         (print-hash  [_ _ _ _ _] (reset! matched? true)))
       {::matched? matched?})))

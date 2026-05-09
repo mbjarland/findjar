@@ -52,12 +52,37 @@ Match against file content lines.
 Apply the given Pattern flag chars (i, m, s, u, x, d) to every regex.
 .TP
 .BI \-t " types" ", " \-\-types " types"
-Restrict file types: n (normal files), j (entries in jars), z (entries in zips). Default: nj.
+Restrict file types: n (normal files), j (entries in jars), z (entries in zips), t (entries in .tar / .tar.gz / .tgz archives). Default: nj.
 
 .SS Action
 .TP
 .BR \-c ", " \-\-cat
 Print the entire contents of matching files (with line numbers).
+.TP
+.B \-\-manifest
+For each matched .jar/.zip entry whose path looks like
+.I META-INF/MANIFEST.MF
+or
+.IR pom.properties ,
+print its contents. Convenient one-step replacement for
+.IR "findjar app.jar -t j -p MANIFEST -c" .
+.TP
+.B \-\-class-info
+For each matched .class entry, parse via ASM and print the class
+name, access modifiers, super, implemented interfaces, and method
+signatures. Combines naturally with
+.B \-\-output json
+to emit structured records.
+.TP
+.B \-\-count
+With
+.BR \-g ,
+print only the count of matching lines per file.
+.TP
+.B \-\-max-count
+Stop after
+.I n
+matching lines per file.
 .TP
 .BR \-l ", " \-\-files-only
 With
@@ -233,10 +258,42 @@ Recurse into uberjars:
 findjar app.jar --nested -n MANIFEST.MF
 .RE
 .PP
+Dump every fatjar's manifest (no need to know the META-INF path):
+.PP
+.RS
+findjar app.jar --nested --manifest
+.RE
+.PP
+Class-file structure (name, super, interfaces, methods):
+.PP
+.RS
+findjar ~/.m2 -t j -n DataSourceConfig.class --class-info
+.RE
+.PP
 JSON output for editor / jq pipelines:
 .PP
 .RS
 findjar . -g TODO --output json | jq -s 'group_by(.path)'
+.RE
+.PP
+List every class that implements a given interface (combine
+.B \-\-class-info
+with
+.B \-\-output json
+and
+.IR jq ):
+.PP
+.RS
+findjar ~/.m2 -t j --class-info --output json |
+.br
+\\ \\ \\ \\ jq 'select(.interfaces|index("java/io/Serializable"))|.name'
+.RE
+.PP
+Search inside tar / tar.gz / tgz archives (system tarballs, distro
+packages, Python wheels' source dist):
+.PP
+.RS
+findjar ~/Downloads -t t -n setup.py
 .RE
 
 .SH AUTHOR

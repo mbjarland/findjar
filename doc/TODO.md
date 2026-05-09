@@ -51,21 +51,23 @@ High-frequency, small additions, no risk:
 
 Bigger lifts but high payoff for findjar's "JVM tooling" niche:
 
-- [ ] **Tar / tar.gz / tar.xz support.** New entry in `file-finders`,
-      same plumbing as jar/zip. Use `commons-compress` (small dep) or
-      hand-roll a tar reader (~150 lines pure Clojure).
-- [ ] **MANIFEST.MF / pom.properties auto-extract.**
-      `findjar app.jar --manifest` outputs `Main-Class:`, `Bundle-Version:`,
-      etc. without needing `-c`. Tiny convenience, oddly satisfying.
-- [ ] **Class-file aware mode.** `--class-info` parses `.class` entries
-      via ASM and emits class name, super, interfaces, methods. Real
-      JVM-tooling territory — would make findjar a serious replacement
-      for `jar -tf | grep` + `javap`.
-- [ ] **`.gitignore` recursion.** Today only the search-root .gitignore
-      is read. Real git reads at every directory level with cascading
-      rules. Useful for monorepos. Bigger lift but the "right" behavior.
-- [ ] **`.gitignore` negation (`!pattern`).** Currently skipped; would
-      need "last-match-wins" tracking.
+- [x] **Tar / tar.gz / tgz support.** Entry `t` in `--types`. Hand-
+      rolled minimal tar reader (USTAR + GNU long-name extension);
+      GZIPInputStream for the gzip wrapper. .tar.xz / .tar.bz2 not
+      yet — they'd need a real dep.
+- [x] **MANIFEST.MF / pom.properties auto-extract.** `--manifest`
+      cats every matched `META-INF/MANIFEST.MF` or `pom.properties`
+      entry without needing the user to know the exact path.
+- [x] **Class-file aware mode.** `--class-info` parses `.class`
+      entries via ASM (`org.ow2.asm/asm` dep), emits class name, access
+      modifiers, super, interfaces, methods. Plays nicely with
+      `--output json` for jq / editor pipelines.
+- [x] **`.gitignore` recursion.** Per-directory matchers stacked on
+      descent in walk-tree; each `.gitignore` applies only to its
+      subtree.
+- [x] **`.gitignore` negation (`!pattern`).** Last-match-wins
+      semantics (a `!keep.log` re-includes a file otherwise matched
+      by `*.log`).
 
 ## Tier 4 — Polish
 

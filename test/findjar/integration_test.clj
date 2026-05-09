@@ -291,11 +291,28 @@
     (testing "files not matched by gitignore are included"
       (is (contains? paths "alpha.txt")))))
 
+(deftest gitignore-negation-re-includes
+  (let [paths (set (ro/paths-of (run {:all true}) :match))]
+    (testing "trace.log is excluded by *.log"
+      (is (not (contains? paths "trace.log"))))
+    (testing "keep.log is re-included by !keep.log"
+      (is (contains? paths "keep.log")))))
+
+(deftest gitignore-recursion-per-directory
+  ;; sub-with-gi/.gitignore says '*.skip', which should hide
+  ;; sub-with-gi/local.skip but not affect anything outside that subtree.
+  (let [paths (set (ro/paths-of (run {:all true}) :match))]
+    (testing "subtree-local pattern hides matched files in that subtree"
+      (is (not (contains? paths "sub-with-gi/local.skip"))))
+    (testing "non-matched files in the same subtree are still included"
+      (is (contains? paths "sub-with-gi/should-stay.txt")))))
+
 (deftest no-gitignore-flag-disables-gitignore
   (let [paths (set (ro/paths-of (run {:all true :no-gitignore true}) :match))]
-    (testing "with --no-gitignore, ignored/ and *.log are reachable"
+    (testing "with --no-gitignore, ignored/ and *.log and *.skip are all reachable"
       (is (contains? paths "ignored/secret.clj"))
-      (is (contains? paths "trace.log")))))
+      (is (contains? paths "trace.log"))
+      (is (contains? paths "sub-with-gi/local.skip")))))
 
 ;; ----------------------------------------------------------------------------
 ;; -v / --invert-match
@@ -420,6 +437,67 @@
                   (filter :hit?))]
     (is (= 1 (count hits)))
     (is (= "outer.jar@inner.jar@deep/token.txt" (:path (first hits))))))
+
+;; ----------------------------------------------------------------------------
+;; tar / tar.gz support
+
+(deftest tar-entries-listed
+  (let [out (run {:types #{"tar"}})
+        paths (set (ro/paths-of out :match))]
+    (testing "uncompressed tar archive's entries appear with @-separator"
+      (is (contains? paths "demo.tar@hello.txt"))
+      (is (contains? paths "demo.tar@deep/x.txt")))
+    (testing "gzipped tar archive too"
+      (is (contains? paths "demo.tar.gz@hello.txt"))
+      (is (contains? paths "demo.tar.gz@deep/x.txt")))))
+
+(deftest grep-inside-tar
+  (let [out (run {:types #{"tar"} :grep #"deep tar"})
+        hits (->> (ro/calls-of out)
+                  (filter #(= :grep (first %)))
+                  (map #(nth % 2))
+                  (filter :hit?))]
+    (testing "grep finds the marker in both tar and tar.gz"
+      (is (= 2 (count hits)))
+      (is (every? #(re-find #"^demo\.tar(\.gz)?@deep/x\.txt$" %)
+                  (map :path hits))))))
+
+;; ----------------------------------------------------------------------------
+;; --manifest sugar
+
+(deftest manifest-sugar-extracts-mf-entries
+  (let [out  (run {:manifest true})
+        rows (filter #(= :dump (first %)) (ro/calls-of out))]
+    (testing "every dumped block is a MANIFEST.MF entry from a jar"
+      (is (seq rows))
+      (is (every? #(re-find #"jar@.*MANIFEST\.MF$" (nth % 1)) rows)))
+    (testing "the dumped content includes the manifest header"
+      (is (some #(re-find #"Manifest-Version:" (nth % 2)) rows)))))
+
+;; ----------------------------------------------------------------------------
+;; --class-info via ASM
+
+(deftest class-info-on-fixture-class
+  (let [out (run {:class-info true :name #"^Greeter\.class$"
+                  :types #{:default}})
+        rows (filter #(= :class-info (first %)) (ro/calls-of out))]
+    (is (= 1 (count rows)))
+    (let [[_ path info _] (first rows)]
+      (is (= "Greeter.class" path))
+      (is (= "fixture/Greeter" (:name info)))
+      (is (= "java/lang/Object" (:super info)))
+      (is (= ["java/io/Serializable"] (vec (:interfaces info))))
+      (is (contains? (:access info) :public))
+      (testing "method names captured"
+        (let [method-names (set (map :name (:methods info)))]
+          (is (contains? method-names "<init>"))
+          (is (contains? method-names "hello")))))))
+
+(deftest class-info-skips-non-class-entries
+  (let [out (run {:class-info true :name #"^alpha\.txt$"
+                  :types #{:default}})]
+    (testing "non-.class files don't produce class-info calls"
+      (is (empty? (filter #(= :class-info (first %)) (ro/calls-of out)))))))
 
 ;; ----------------------------------------------------------------------------
 ;; --find-by-hash

@@ -21,6 +21,13 @@
   (grep-count [this path n opts]
     "Called for --count. n is the number of matching lines in the file.
      Suppresses any grep-match calls for the same file.")
+  (class-info [this path info opts]
+    "Called for --class-info on a .class entry. info is:
+       {:name 'java/lang/String'
+        :super 'java/lang/Object'
+        :interfaces ['java/io/Serializable' ...]
+        :access #{:public :final ...}
+        :methods [{:name '<init>' :desc '()V' :access #{:public}} ...]}")
   (dump-stream [this path materialized opts]
     "Called for -c (cat). materialized is the already-rendered string
      (including ANSI / line-number formatting) ready to be emitted. The

@@ -9,6 +9,27 @@ build numbers.
 
 ### Added (post-merge to master)
 
+- **Tier 3 features.**
+  - **`--manifest`** — for each matched .jar/.zip entry that is
+    `META-INF/MANIFEST.MF` or any `pom.properties`, print its
+    contents. Lets you `findjar app.jar --manifest --nested` to dump
+    every manifest of every fat-jar dependency in one shot.
+  - **`--class-info`** — parses `.class` entries via ASM and prints
+    the class name, access modifiers, super, implemented interfaces,
+    and method signatures. Combines with `--output json` for jq /
+    editor pipelines (e.g. *every class that implements
+    `Serializable`*). Adds `org.ow2.asm/asm 9.7.1` as a runtime dep.
+  - **Tar / tar.gz / tgz support.** New `t` selector in `--types`.
+    Hand-rolled minimal tar reader (no commons-compress); GZIPInputStream
+    handles the gzip wrapper.
+  - **`.gitignore` recursion**: a `.gitignore` in any descendant
+    directory contributes patterns for that subtree, matching git's
+    behavior.
+  - **`.gitignore` negation**: `!pattern` lines re-include
+    previously-excluded files; rule order matters, last match wins.
+- **File search-roots accepted.** `findjar app.jar --manifest` works:
+  a single-file root is treated as a one-element seq instead of being
+  rejected with "non-directory search root".
 - **GitHub Actions release pipeline** at `.github/workflows/release.yml`.
   Push a `v*` tag → matrix builds the native binary on `linux-x64`,
   `macos-arm64`, `windows-x64` runners; packages each with the man

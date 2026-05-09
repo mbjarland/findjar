@@ -146,6 +146,12 @@
 
      ["-c" "--cat"
       "print the entire contents of matching files (with line numbers)"]
+     [nil "--manifest"
+      "for each matched .jar/.zip, print its META-INF/MANIFEST.MF (and any pom.properties). Implies -t j."
+      :id :manifest]
+     [nil "--class-info"
+      "for each matched .class entry, print class name, super, interfaces, and method signatures (parsed via ASM)"
+      :id :class-info]
      ["-l" "--files-only"
       "with -g, print one path per matching file instead of every matching line"]
      [nil "--count"
@@ -243,8 +249,8 @@
 
 (def option-groups
   [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :types]]
-   ["Action"     [:cat :files-only :count :max-count :hash :find-by-hash
-                  :quiet]]
+   ["Action"     [:cat :manifest :class-info :files-only :count :max-count
+                  :hash :find-by-hash :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome]]
    ["Scanning"   [:all :follow :max-depth :exclude :no-gitignore :text
                   :no-parallel :parallel-jobs :nested]]
@@ -403,7 +409,11 @@
         ;; No positional => search current directory.
         roots-strs   (if (empty? arguments) ["."] arguments)
         search-roots (mapv jio/file roots-strs)
-        bad-roots    (remove #(.isDirectory ^java.io.File %) search-roots)]
+        ;; A search-root can be a directory (recursive walk) or a file
+        ;; (treated as a one-element seq — useful for 'findjar app.jar
+        ;; --manifest' or 'findjar foo.jar -t j -g pat'). Anything that
+        ;; doesn't exist is rejected.
+        bad-roots    (remove (fn [^java.io.File f] (.exists f)) search-roots)]
     (cond
       (:version options)
       {:exit-message (str "findjar " (version-string)) :ok? true}
@@ -438,7 +448,7 @@
       {:exit-message (error-msg errors summary)}
 
       (seq bad-roots)
-      (fail (str "non-directory search root"
+      (fail (str "search root not found"
                  (when (< 1 (count bad-roots)) "s") ": "
                  (english-list (mapv str bad-roots))))
 
