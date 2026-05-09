@@ -42,10 +42,16 @@ import json, sys, time
 inp, outp = sys.argv[1], sys.argv[2]
 with open(inp, 'rb') as f:
     body = f.read().decode('utf-8', errors='replace')
+# xterm.js (used by svg-term) runs in raw mode: a bare LF moves the
+# cursor down one row but does NOT return it to col 0. Convert to CRLF
+# so each new row starts at the left edge.
+body = body.replace('\n', '\r\n')
+ESC = '\x1b'
+prompt = (f'{ESC}[1;36m~{ESC}[m {ESC}[33m❯{ESC}[m '
+          "findjar ~/.m2 -n core.clj -g 'Rich Hickey' -t j -x 1\r\n")
 header = {"version": 2, "width": 130, "height": 16,
-         "timestamp": int(time.time()),
-         "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
-prompt = "[1;36m~[m [33m❯[m findjar ~/.m2 -n core.clj -g 'Rich Hickey' -t j -x 1\n"
+          "timestamp": int(time.time()),
+          "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
 with open(outp, 'w') as f:
     f.write(json.dumps(header) + "\n")
     f.write(json.dumps([0.0, "o", prompt]) + "\n")
