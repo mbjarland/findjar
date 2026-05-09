@@ -35,7 +35,14 @@ fi
 
 mkdir -p "$(dirname "$OUT")"
 
-FORCE_COLOR=1 "$BIN" "$M2" -n core.clj -g 'Rich Hickey' -t j -x 1 > "$TXT"
+# Cat-with-grep: green line numbers, red <<< / >>> markers, and red
+# match highlighting all in one frame. Trim to the first 11 output lines
+# (header + lines 1..10) and append a synthetic closing >>>>>>> so the
+# marker stays visible inside the small SVG viewport.
+{
+  FORCE_COLOR=1 "$BIN" "$M2" -n 'set\.clj' -g 'Rich Hickey' -c -t j | head -11
+  printf '\x1b[31m>>>>>>>\x1b[m\n'
+} > "$TXT"
 
 python3 - "$TXT" "$CAST" <<'PY'
 import json, sys, time
@@ -48,7 +55,7 @@ with open(inp, 'rb') as f:
 body = body.replace('\n', '\r\n')
 ESC = '\x1b'
 prompt = (f'{ESC}[1;36m~{ESC}[m {ESC}[33m❯{ESC}[m '
-          "findjar ~/.m2 -n core.clj -g 'Rich Hickey' -t j -x 1\r\n")
+          r"findjar ~/.m2 -n 'set\.clj' -g 'Rich Hickey' -c -t j" "\r\n")
 header = {"version": 2, "width": 130, "height": 16,
           "timestamp": int(time.time()),
           "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
@@ -59,6 +66,6 @@ with open(outp, 'w') as f:
 PY
 
 svg-term --in "$CAST" --out "$OUT" \
-  --width 130 --height 7 --window --no-cursor --at 1000 --padding 14
+  --width 100 --height 13 --window --no-cursor --at 1000 --padding 14
 
 echo "wrote $OUT"
