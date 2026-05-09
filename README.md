@@ -1,6 +1,6 @@
 # findjar
 
-> **Like `grep`, but it sees inside your jars.**
+> **Like `grep`, but it sees inside your jars, zips, and tarballs.**
 
 [![Build](https://github.com/mbjarland/findjar/actions/workflows/ci.yml/badge.svg)](https://github.com/mbjarland/findjar/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/mbjarland/findjar?label=release&color=brightgreen)](https://github.com/mbjarland/findjar/releases/latest)
@@ -85,15 +85,19 @@ You probably already use one of these. Here's where each falls short:
 
 | You currently use | Limitation findjar removes |
 |---|---|
-| **`grep -r`** | Can't see inside jar/zip archives. |
+| **`grep -r`** | Can't see inside jar/zip/tar archives. |
+| **`zgrep` / `zcat | grep`** | Treats a `.tar.gz` as one opaque stream — no per-entry results, no idea which file inside matched. |
 | **`unzip -p` ‖ `for f in $(find ...); do …`** | Verbose, fragile, no parallelism, no nested-jar recursion. |
 | **`jar -tf` ‖ `unzip -l`** | Lists entries but can't grep their content. |
 | **`rg` (ripgrep)** | Native to text files; archive support is bolted on (and slower). |
-| **IDE search across libraries** | Locks you into the IDE; doesn't scriptable / pipeline. |
+| **IDE search across libraries** | Locks you into the IDE; not scriptable / pipeline-able. |
 
 findjar is built specifically for the JVM-developer workflow:
 *"where the heck does this class actually come from on my classpath,
-and what version is it?"*
+and what version is it?"* — but the archive-aware grep core is just
+as useful for tarballs, distro packages, Python wheels' source
+dists, and anywhere else you want per-entry results across compressed
+or bundled content.
 
 ---
 
