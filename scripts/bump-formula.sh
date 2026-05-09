@@ -69,8 +69,11 @@ patch_sha() {
 import re, sys
 path = "$formula"
 src = open(path).read()
+# Match the sha256 line that follows the matching url. Allow any non-quote
+# content as the existing value (could be a hex sum from a prior bump or
+# a 'REPLACE_WITH_...' placeholder on the initial commit of the formula).
 pat = re.compile(
-    r'(url\s+"[^"]*-${version}-${platform}\.tar\.gz"\s*\n\s*sha256\s+")[0-9a-fA-F]+(")',
+    r'(url\s+"[^"]*-${version}-${platform}\.tar\.gz"\s*\n\s*sha256\s+")[^"]+(")',
     re.MULTILINE)
 new, n = pat.subn(r'\g<1>${sum}\g<2>', src)
 if n != 1:
