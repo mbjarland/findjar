@@ -160,36 +160,42 @@
   (let [plat       (platform-id)
         win?       (windows?)
         bin-name   (if win? "findjar.exe" "findjar")
-        ;; native-image always emits 'findjar'; rename for windows
         out-bin    (str "target/" bin-name)
+        ;; native-image always emits 'findjar'; rename for windows
         _          (when (and win? (.exists (jio/file "target/findjar")))
                      (jio/copy (jio/file "target/findjar") (jio/file out-bin))
                      (.delete (jio/file "target/findjar")))
-        stage      (jio/file (str "target/findjar-" version "-" plat))
+        ;; Stage into target/dist/findjar-<v>-<plat>/. The dist parent
+        ;; is what we tar/zip — that way the archive always contains a
+        ;; single top-level dir (findjar-<v>-<plat>/) regardless of
+        ;; platform, instead of dumping files at the archive root on
+        ;; Windows.
+        dist-name  (str "findjar-" version "-" plat)
+        dist-root  "target/dist"
+        stage      (jio/file (str dist-root "/" dist-name))
         ext        (if win? "zip" "tar.gz")
-        archive    (str "target/findjar-" version "-" plat "." ext)]
+        archive    (str "target/" dist-name "." ext)]
     (log "packaging" archive)
-    (b/delete {:path (.getPath stage)})
+    (b/delete {:path dist-root})
     (.mkdirs stage)
-    ;; Stage the layout: findjar-<v>-<plat>/{findjar[.exe],LICENSE,
-    ;;   man/findjar.1, completions/{zsh,bash,fish}}
     (b/copy-file {:src out-bin :target (str (.getPath stage) "/" bin-name)})
     (.setExecutable (jio/file (str (.getPath stage) "/" bin-name)) true false)
     (b/copy-file {:src "LICENSE" :target (str (.getPath stage) "/LICENSE")})
     (b/copy-dir  {:src-dirs ["man"] :target-dir (str (.getPath stage) "/man")})
     (b/copy-dir  {:src-dirs ["resources/findjar/completions"]
                   :target-dir (str (.getPath stage) "/completions")})
-    ;; Build the archive
+    ;; Build the archive. Linux/macOS shell out to tar (always present
+    ;; with gzip support). Windows uses tools.build's b/zip so we don't
+    ;; depend on a 'zip' binary being on PATH (windows-latest runners
+    ;; don't ship one).
     (b/delete {:path archive})
-    (let [{:keys [exit]}
-          (if win?
-            (b/process {:command-args ["zip" "-rq" (.getName (jio/file archive))
-                                       (.getName stage)]
-                        :dir          "target"})
-            (b/process {:command-args ["tar" "-czf"
-                                       (.getName (jio/file archive))
-                                       (.getName stage)]
-                        :dir          "target"}))]
-      (when (not (zero? exit))
-        (throw (ex-info (str "archive command failed (exit " exit ")") {}))))
+    (if win?
+      (b/zip {:src-dirs [dist-root]
+              :zip-file archive})
+      (let [{:keys [exit]} (b/process {:command-args ["tar" "-czf"
+                                                       (str "../" dist-name "." ext)
+                                                       dist-name]
+                                        :dir          dist-root})]
+        (when (not (zero? exit))
+          (throw (ex-info (str "tar failed (exit " exit ")") {})))))
     (log "archive:" archive)))

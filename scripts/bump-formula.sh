@@ -41,10 +41,9 @@ sum_for() {
 }
 
 sha_arm64=$(sum_for "macos-arm64.tar.gz")
-sha_x64=$(sum_for "macos-x64.tar.gz")
 sha_linux=$(sum_for "linux-x64.tar.gz")
 
-for var in sha_arm64 sha_x64 sha_linux; do
+for var in sha_arm64 sha_linux; do
   if [[ -z "${!var}" ]]; then
     echo "missing sum for $var in SHASUMS256.txt" >&2
     echo "$shasums" >&2
@@ -52,13 +51,12 @@ for var in sha_arm64 sha_x64 sha_linux; do
   fi
 done
 
-# Use sed -i with a tmp suffix for cross-platform compat (BSD vs GNU).
+# Use sed with a tmp suffix for cross-platform compat (BSD vs GNU).
 tmp="${formula}.bak"
 
 sed -E "\
 s|^(  version  *)\"[^\"]*\"|\1\"${version}\"|; \
-s|/v[^/]*/findjar-[^-]+-[^.]+(-arm64\.tar\.gz)|/${tag}/findjar-${version}-macos-arm64.tar.gz|g; \
-s|/v[^/]*/findjar-[^-]+-macos-x64\.tar\.gz|/${tag}/findjar-${version}-macos-x64.tar.gz|g; \
+s|/v[^/]*/findjar-[^-]+-macos-arm64\.tar\.gz|/${tag}/findjar-${version}-macos-arm64.tar.gz|g; \
 s|/v[^/]*/findjar-[^-]+-linux-x64\.tar\.gz|/${tag}/findjar-${version}-linux-x64.tar.gz|g" \
   "$formula" > "$tmp"
 mv "$tmp" "$formula"
@@ -83,7 +81,6 @@ PY
 }
 
 patch_sha "macos-arm64" "$sha_arm64"
-patch_sha "macos-x64"   "$sha_x64"
 patch_sha "linux-x64"   "$sha_linux"
 
 echo

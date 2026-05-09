@@ -72,9 +72,13 @@ This pulls a prebuilt platform-native binary from the latest
 
 **From the GitHub Release directly**:
 
-Download `findjar-<version>-<platform>.{tar.gz,zip}` from
-[Releases][releases], extract, and put `findjar` on `$PATH`.
-Platforms: `linux-x64`, `macos-arm64`, `macos-x64`, `windows-x64`.
+Download the right archive for your platform from [Releases][releases],
+extract, and put `findjar` on `$PATH`. Platforms shipped:
+
+  - `findjar-<v>-linux-x64.tar.gz`
+  - `findjar-<v>-macos-arm64.tar.gz` (Apple Silicon; Intel macs on
+    macOS 11+ run this transparently via Rosetta 2)
+  - `findjar-<v>-windows-x64.zip`
 
 [releases]: https://github.com/mbjarland/findjar/releases
 

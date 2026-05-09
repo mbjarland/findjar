@@ -29,8 +29,10 @@ jobs:
             platform: linux-x64
           - os: macos-latest
             platform: macos-arm64
-          - os: macos-13       # Intel runners, while Apple keeps offering them
-            platform: macos-x64
+          # Intel macOS runners (macos-13) are heavily queued / often
+          # unavailable now that GitHub has deprecated them. Apple Silicon
+          # users get a native arm64 binary; Intel mac users on macOS 11+
+          # can run that arm64 binary via Rosetta 2 with no fuss.
           - os: windows-latest
             platform: windows-x64
     runs-on: ${{ matrix.os }}

@@ -11,9 +11,10 @@ build numbers.
 
 - **GitHub Actions release pipeline** at `.github/workflows/release.yml`.
   Push a `v*` tag → matrix builds the native binary on `linux-x64`,
-  `macos-arm64`, `macos-x64`, `windows-x64` runners; packages each
-  with the man page and shell completions; publishes a GitHub
-  Release with `SHASUMS256.txt` and auto-generated notes.
+  `macos-arm64`, `windows-x64` runners; packages each with the man
+  page and shell completions; publishes a GitHub Release with
+  `SHASUMS256.txt` and auto-generated notes. Intel macs run the
+  arm64 binary via Rosetta 2.
 - **`clj -T:build package` task** that wraps `native-image` and
   produces a release-ready `target/findjar-<v>-<platform>.tar.gz`
   (or `.zip` on Windows). Layout: `findjar/`, `LICENSE`,

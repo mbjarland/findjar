@@ -61,7 +61,9 @@ git push origin v1.0.130
 The push triggers `.github/workflows/release.yml`. The workflow:
 
 1. Builds the native binary on each of `linux-x64`, `macos-arm64`,
-   `macos-x64`, `windows-x64` runners (parallel matrix).
+   `windows-x64` runners (parallel matrix). Intel macOS isn't shipped
+   as a separate asset — Apple Silicon users get arm64 native, Intel
+   mac users on macOS 11+ run the arm64 binary via Rosetta 2.
 2. Packages each binary with the man page, LICENSE, and shell
    completion scripts into `findjar-<version>-<platform>.tar.gz`
    (or `.zip` on Windows).

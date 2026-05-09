@@ -18,15 +18,11 @@ class Findjar < Formula
   version  "1.0.130"   # bump per release
   license  "EPL-2.0"
 
+  # We ship one macOS asset (arm64). Intel macs run the arm64 binary
+  # via Rosetta 2 — Homebrew handles this transparently for the user.
   on_macos do
-    on_arm do
-      url    "https://github.com/mbjarland/findjar/releases/download/v#{version}/findjar-#{version}-macos-arm64.tar.gz"
-      sha256 "REPLACE_WITH_SHA256_OF_macos-arm64_TARBALL"
-    end
-    on_intel do
-      url    "https://github.com/mbjarland/findjar/releases/download/v#{version}/findjar-#{version}-macos-x64.tar.gz"
-      sha256 "REPLACE_WITH_SHA256_OF_macos-x64_TARBALL"
-    end
+    url    "https://github.com/mbjarland/findjar/releases/download/v#{version}/findjar-#{version}-macos-arm64.tar.gz"
+    sha256 "REPLACE_WITH_SHA256_OF_macos-arm64_TARBALL"
   end
 
   on_linux do
