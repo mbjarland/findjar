@@ -7,6 +7,32 @@ build numbers.
 
 ## Unreleased
 
+### Added (post-merge to master)
+
+- **Common grep flags** users reach for from muscle memory:
+  - **`-v` / `--invert-match`** — emit lines that do NOT match.
+  - **`-w` / `--word-regexp`** — wrap the grep pattern in `\b…\b` for
+    word-boundary match.
+  - **`--count`** — emit only the count of matching lines per file
+    (`<path>:<n>` in text mode, `{"kind":"count",...}` in JSON).
+  - **`--max-count <n>`** — stop after N matching lines per file.
+- **GraalVM native-image build.** New `native-image` task in build.clj.
+  Run `clj -T:build native-image` against an Oracle GraalVM 25 install
+  (or set `GRAALVM_HOME`). Produces `target/findjar` (~35MB on macOS
+  arm64) with ~25x faster startup than the JVM uberjar. Reachability
+  metadata captured from the agent lives at
+  `resources/META-INF/native-image/findjar/findjar/`.
+- **`doc/TODO.md`** — full roadmap of follow-up ideas across five
+  tiers from distribution to niche.
+
+### Changed
+
+- **`jansi-clj.auto`** require removed; jansi installation now happens
+  explicitly inside `-main` (was at namespace-load time, which
+  prevented native-image builds).
+- **Type hints** in `findjar.hash` and `findjar.cli/un-whitespace` to
+  eliminate runtime reflection — required for native-image.
+
 ### Added
 
 - **Default search-root is the current directory.** `findjar -g foo`

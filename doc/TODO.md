@@ -10,12 +10,17 @@ Items are tiered by ROI; pick from any tier independently.
 The tool is feature-complete for its niche; the next-biggest improvement
 is making it **instant to start** and **one command to install**.
 
-- [ ] **GraalVM native-image build.** Drops cold start from ~150ms (JVM
-      warm-up) to ~10ms — meaningful when `findjar -q` is in a shell-script
-      hot loop. Recommended Graal: Oracle GraalVM 25 LTS
-      (`25.0.3-graal` via SDKMAN).  Caveats: jansi needs reflection
-      config (project ships one), resources need `-H:IncludeResources`,
-      `:gen-class -main` is already the right entrypoint shape.
+- [x] **GraalVM native-image build.** Done. `clj -T:build native-image`
+      against Oracle GraalVM 25 (`25.0.3-graal`) produces a 34MB
+      `target/findjar` with ~22ms startup (vs ~780ms for the JVM jar,
+      a 35× speedup on the same hardware). `resources/META-INF/native-image/`
+      ships a small targeted reflection config for jansi + Clojure
+      runtime; `--enable-all-security-services` covers MessageDigest /
+      JCA. Caveats remain: jansi-clj.auto can't be required (its
+      install-at-clinit traps the AnsiPrintStream in the build heap —
+      we now install jansi from -main), and the native-image agent's
+      full reachability metadata caused build-time deadlocks under
+      analysis, so we hand-trimmed the config.
 - [ ] **Homebrew formula** in a `homebrew-findjar` tap repo:
       `brew install mbjarland/findjar/findjar`. ~30 lines of Ruby.
       Pairs naturally with the native-image binary.
@@ -23,8 +28,11 @@ is making it **instant to start** and **one command to install**.
       uberjar + native binaries for `linux-x64`, `macos-arm64`, `macos-x64`,
       `windows-x64`, attaches to the GH Release. Pattern is well-known
       (used by babashka, clj-kondo). ~50 lines of YAML.
-- [ ] **Bash / zsh / fish completions** in `completions/` directory,
-      installed by Homebrew. ~50 lines per shell.
+- [x] **Bash / zsh / fish completions.** `completions/_findjar` (zsh),
+      `completions/findjar.bash`, `completions/findjar.fish`. Cover
+      every flag with appropriate value completion (algorithms, types,
+      output formats, file paths). Install per your shell's convention
+      or via Homebrew (TODO).
 
 ## Tier 2 — Common grep flags users will reach for
 

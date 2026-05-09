@@ -1,0 +1,48 @@
+#compdef findjar
+# zsh completion for findjar. Drop into a directory on your $fpath
+# (e.g. /usr/local/share/zsh/site-functions/) and reload zsh.
+
+_findjar() {
+  local context state state_descr line
+  typeset -A opt_args
+
+  _arguments -s -S \
+    '(-n --name)'{-n,--name}'[match against file name (regex)]:regex' \
+    '(-p --path)'{-p,--path}'[match against relative path (regex)]:regex' \
+    '(-a --apath)'{-a,--apath}'[match against absolute path (regex)]:regex' \
+    '(-G --glob)'{-G,--glob}'[match against file name (glob)]:pattern' \
+    '(-g --grep)'{-g,--grep}'[match against file content lines (regex)]:regex' \
+    '(-w --word-regexp)'{-w,--word-regexp}'[grep with word boundaries]' \
+    '(-v --invert-match)'{-v,--invert-match}'[emit non-matching lines]' \
+    '(-f --flags)'{-f,--flags}'[regex flags (i m s u x d)]:flags' \
+    '(-t --types)'{-t,--types}'[restrict file types]:types:(n j z nj nz jz njz)' \
+    '(-c --cat)'{-c,--cat}'[print contents of matching files]' \
+    '(-l --files-only)'{-l,--files-only}'[print only matching paths]' \
+    '--count[print only the count of matches per file]' \
+    '--max-count[stop after <n> matches per file]:n' \
+    '(-s --hash)'{-s,--hash}'[print file hash]:algo:(md5 sha1 sha256 sha512 crc32)' \
+    '--find-by-hash[find files by hash <algo>:<hex>]:spec' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output, exit 0/1 on match]' \
+    '(-x --context)'{-x,--context}'[lines of symmetric context]:n' \
+    '(-A --after)'{-A,--after}'[lines of after-context]:n' \
+    '(-B --before)'{-B,--before}'[lines of before-context]:n' \
+    '--output[output format]:fmt:(text json)' \
+    '(-o --out-file)'{-o,--out-file}'[append cat output to file]:file:_files' \
+    '(-m --monochrome)'{-m,--monochrome}'[disable ANSI coloring]' \
+    '--all[traverse every directory (no skipping)]' \
+    '(-L --follow)'{-L,--follow}'[follow symbolic links]' \
+    '--max-depth[limit traversal depth]:n' \
+    '*--exclude[skip directories with this name (repeatable)]:name' \
+    '--no-gitignore[do not honor .gitignore]' \
+    '--text[do not skip binary files when grepping]' \
+    '--no-parallel[scan files serially]' \
+    '--parallel-jobs[cap concurrent scan workers]:n' \
+    '--nested[recurse into jars-inside-jars]' \
+    '--examples[print usage examples and exit]' \
+    '--profile[enable tufte profiling]' \
+    '(-V --version)'{-V,--version}'[print version and exit]' \
+    '(-h --help)'{-h,--help}'[show help and exit]' \
+    '*:search-root:_files -/'
+}
+
+_findjar "$@"

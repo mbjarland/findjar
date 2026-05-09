@@ -19,8 +19,10 @@
     (loop [i 0]
       (when (< i len)
         (let [b (aget data i)]
-          (aset buffer (* 2 i) (aget hex-chars (bit-shift-right (bit-and b 0xF0) 4)))
-          (aset buffer (inc (* 2 i)) (aget hex-chars (bit-and b 0x0F))))
+          (aset buffer (* 2 i)
+                (aget hex-chars (int (bit-shift-right (bit-and b 0xF0) 4))))
+          (aset buffer (inc (* 2 i))
+                (aget hex-chars (int (bit-and b 0x0F)))))
         (recur (inc i))))
     (String. buffer "UTF-8")))
 
@@ -44,16 +46,16 @@
   active JVM and an input stream, will digest the input stream and return
   a hex string representation of the resulting digest value."
   [^String algo ^InputStream stream]
-  (let [digest (MessageDigest/getInstance algo)]
-    (with-open [dis (DigestInputStream. stream digest)]
+  (let [^MessageDigest md (MessageDigest/getInstance algo)]
+    (with-open [dis (DigestInputStream. stream md)]
       (read-is dis 256 nil))
-    (bytes->hex (.digest digest))))
+    (bytes->hex (.digest md))))
 
-(defn crc-32 
+(defn crc-32
   "crc-32 is not a message digest implementation so we have a
   custom implementation here instead"
   [^InputStream stream]
-  (let [crc (CRC32.)]
-    (read-is stream 256 (fn [^bytes buf ^long n] (.update crc buf 0 n)))
+  (let [^CRC32 crc (CRC32.)]
+    (read-is stream 256 (fn [^bytes buf ^long n] (.update crc buf 0 (int n))))
     (String/format Locale/US "%08x" (to-array [(.getValue crc)]))))
 

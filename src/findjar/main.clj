@@ -10,8 +10,7 @@
             [findjar.output.json :as json-out]
             [findjar.protocols :as p]
             [findjar.render :as r]
-            [jansi-clj.auto]
-            [jansi-clj.core :refer [red white]]
+            [jansi-clj.core :as ansi :refer [red white]]
             [taoensso.tufte :as tufte])
   (:import [java.io File])
   (:gen-class))
@@ -24,10 +23,13 @@
   set). All ANSI coloring is gated by render/use-colors?."
   []
   (reify p/FindJarOutput
-    (warn [_ msg _ex opts]
+    (warn [_ msg ex opts]
       (binding [r/*use-colors* (r/use-colors? opts)
                 *out*          *err*]
-        (println (r/style red (str "WARN: " msg)))))
+        (println (r/style red (str "WARN: " msg)))
+        (when (and ex (some? (System/getenv "FINDJAR_DEBUG")))
+          (let [^Throwable t ex]
+            (.printStackTrace t (java.io.PrintWriter. ^java.io.Writer *err*))))))
 
     (match [_ path _opts]
       (println path))
@@ -105,6 +107,11 @@
   CLI args call System/exit. Returns the JVM exit status (0 = success,
   1 = bad args / no match in quiet mode)."
   [hard-exit-on-errors? args]
+  ;; Install jansi at runtime (was previously done at namespace-load time
+  ;; via jansi-clj.auto, which left an AnsiPrintStream in the native-image
+  ;; build heap). On Unix this is roughly a passthrough; on Windows it
+  ;; translates ANSI escapes to Win32 console calls.
+  (ansi/install!)
   (tufte/add-basic-println-handler! {})
   (let [{:keys [search-roots opts exit-message ok?]} (cli/validate-args args)
         profile? (:profile opts)]

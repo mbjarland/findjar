@@ -1,0 +1,43 @@
+# fish completion for findjar. Drop into ~/.config/fish/completions/.
+
+complete -c findjar -s n -l name        -r -d 'match against file name (regex)'
+complete -c findjar -s p -l path        -r -d 'match against relative path (regex)'
+complete -c findjar -s a -l apath       -r -d 'match against absolute path (regex)'
+complete -c findjar -s G -l glob        -r -d 'match against file name (glob)'
+complete -c findjar -s g -l grep        -r -d 'match against file content lines'
+complete -c findjar -s w -l word-regexp    -d 'grep with word boundaries'
+complete -c findjar -s v -l invert-match   -d 'emit non-matching lines'
+complete -c findjar -s f -l flags       -r -d 'regex flags (i m s u x d)'
+complete -c findjar -s t -l types       -r -d 'restrict file types' \
+  -a 'n j z nj nz jz njz'
+
+complete -c findjar -s c -l cat         -d 'print contents of matching files'
+complete -c findjar -s l -l files-only  -d 'print only matching paths'
+complete -c findjar      -l count       -d 'print only the count of matches per file'
+complete -c findjar      -l max-count   -r -d 'stop after <n> matches per file'
+complete -c findjar -s s -l hash        -r -d 'print file hash' \
+  -a 'md5 sha1 sha256 sha512 crc32'
+complete -c findjar      -l find-by-hash -r -d 'find files by hash <algo>:<hex>'
+complete -c findjar -s q -l quiet       -d 'suppress output, exit 0/1 on match'
+
+complete -c findjar -s x -l context     -r -d 'lines of symmetric context'
+complete -c findjar -s A -l after       -r -d 'lines of after-context'
+complete -c findjar -s B -l before      -r -d 'lines of before-context'
+complete -c findjar      -l output      -r -d 'output format' -a 'text json'
+complete -c findjar -s o -l out-file    -rF -d 'append cat output to file'
+complete -c findjar -s m -l monochrome  -d 'disable ANSI coloring'
+
+complete -c findjar      -l all         -d 'traverse every directory'
+complete -c findjar -s L -l follow      -d 'follow symbolic links'
+complete -c findjar      -l max-depth   -r -d 'limit traversal depth'
+complete -c findjar      -l exclude     -r -d 'skip directories with this name'
+complete -c findjar      -l no-gitignore   -d 'do not honor .gitignore'
+complete -c findjar      -l text        -d 'do not skip binary files when grepping'
+complete -c findjar      -l no-parallel    -d 'scan files serially'
+complete -c findjar      -l parallel-jobs -r -d 'cap concurrent scan workers'
+complete -c findjar      -l nested      -d 'recurse into jars-inside-jars'
+
+complete -c findjar      -l examples    -d 'print usage examples and exit'
+complete -c findjar      -l profile     -d 'enable tufte profiling'
+complete -c findjar -s V -l version     -d 'print version and exit'
+complete -c findjar -s h -l help        -d 'show help and exit'

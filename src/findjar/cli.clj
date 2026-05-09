@@ -5,7 +5,6 @@
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
             [findjar.core :as c]
-            [jansi-clj.auto]
             [jansi-clj.core :as ansi])
   (:import [java.io PushbackReader]
            [java.text SimpleDateFormat]
@@ -58,7 +57,7 @@
   (let [words (str/split line #" ")]
     (cpp/cl-format nil (str "~{~<~%~1," (dec width) ":;~A~> ~}") words)))
 
-(defn un-whitespace [line]
+(defn un-whitespace [^String line]
   (if (.endsWith line "=")
     (subs line 0 (dec (count line)))
     (str/replace line #"\s+" " ")))

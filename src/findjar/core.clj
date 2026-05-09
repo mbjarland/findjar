@@ -17,13 +17,18 @@
 
 (defn with-stream
   "Open the stream produced by stream-factory, hand it to f, close it.
-  On exception, call (warn output msg ex opts) and return nil."
+  On exception, call (warn output msg ex opts) and return nil. The message
+  always includes the exception's simple class name — many JDK errors carry
+  null or terse messages that are hard to act on otherwise."
   [output opts stream-factory f]
   (try
     (with-open [^InputStream s (stream-factory)]
       (f s))
     (catch Exception e
-      (p/warn output (.getMessage e) e opts)
+      (let [cls (.getSimpleName (class e))
+            msg (.getMessage e)
+            full (if msg (str cls ": " msg) cls)]
+        (p/warn output full e opts))
       nil)))
 
 (defn with-reader

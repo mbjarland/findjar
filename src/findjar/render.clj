@@ -6,7 +6,6 @@
   are easy to unit-test."
   (:require [clojure.string :as str]
             [findjar.core :as c]
-            [jansi-clj.auto]
             [jansi-clj.core :refer [green red]])
   (:import [java.io File]))
 
