@@ -151,39 +151,147 @@ completions for zsh / bash / fish via `findjar --completions <shell>`.
 
 ## Usage at a glance
 
+Each example shows the output you'd actually get. ANSI coloring is
+not reproduced here but appears on a TTY.
+
+**Search the current directory for files containing `TODO`** —
+default action is grep; output is `path:line text` (grep-compatible):
+
+```text
+$ findjar -g TODO
+src/foo.clj:42  ;; TODO: refactor this
+src/bar.clj:17  ;; TODO: explain the heuristic
+test/foo_test.clj:9   ;; TODO: cover the ipv6 case
+```
+
+**Glob match against file names**:
+
+```text
+$ findjar -G '*.clj'
+build.clj
+src/findjar/cli.clj
+src/findjar/core.clj
+...
+```
+
+**Grep across a maven cache, jar entries only, with 1-line context**:
+
+```text
+$ findjar ~/.m2 -n clj -g 'Rich Hickey' -t j -x 1
+.../clojure-1.11.1.jar@clojure/set.clj 9   (ns ^{:doc "Set ops..."
+.../clojure-1.11.1.jar@clojure/set.clj:10        :author "Rich Hickey"}
+.../clojure-1.11.1.jar@clojure/set.clj 11        clojure.set)
+```
+
+(Lines using `:` are hits; lines using a space separator are context.)
+
+**Files-only — print just the paths of matching files** (pipe to your editor):
+
+```text
+$ findjar . -g TODO -l
+src/foo.clj
+src/bar.clj
+test/foo_test.clj
+
+$ findjar . -g TODO -l | xargs $EDITOR    # opens all three at once
+```
+
+**Cat a manifest from inside a jar** — line-numbered, with `<<<<<<<` / `>>>>>>>` framing so cat blocks for several files don't run together:
+
+```text
+$ findjar ~/.m2 -n MANIFEST.MF -c -t j
+<<<<<<< .../clojure-1.11.1.jar@META-INF/MANIFEST.MF
+   1  Manifest-Version: 1.0
+   2  Created-By: Apache Maven
+   3  Main-Class: clojure.main
+   4
+>>>>>>>
+```
+
+**Compute multiple hashes in one go** — output is `<hex> <algo> <path>` so multi-algo results are unambiguous:
+
+```text
+$ findjar ~/.m2 -n string.clj -t j -s sha1 -s md5
+ce2bcdc1...  sha1  .../clojure-1.11.1.jar@clojure/string.clj
+8b86d29c...  sha1  .../clojure-1.9.0.jar@clojure/string.clj
+9c3a418e...  md5   .../clojure-1.11.1.jar@clojure/string.clj
+1b2dcf8f...  md5   .../clojure-1.9.0.jar@clojure/string.clj
+```
+
+**Find every copy of a known file by sha1**:
+
+```text
+$ findjar ~/.m2 --find-by-hash sha1:8b86d29c79f3d34d5dba0c50f0c8e6abf6e9b41a
+~/.m2/repository/.../clojure-1.9.0.jar@clojure/core.clj
+~/.m2/repository/.../clojure-1.9.0-sources.jar@clojure/core.clj
+```
+
+**Recurse into nested archives** (uberjars, Spring Boot fatjars) — paths use the `outer.jar@inner.jar@entry` form:
+
+```text
+$ findjar app.jar --nested -n MANIFEST.MF
+app.jar@BOOT-INF/lib/spring-core-6.1.0.jar@META-INF/MANIFEST.MF
+app.jar@BOOT-INF/lib/jackson-core-2.16.1.jar@META-INF/MANIFEST.MF
+app.jar@META-INF/MANIFEST.MF
+```
+
+**Dump every matched jar's manifest** with one flag (`--manifest` is sugar for `-c` on MANIFEST.MF / pom.properties entries):
+
+```text
+$ findjar app.jar --manifest --nested
+<<<<<<< app.jar@META-INF/MANIFEST.MF
+   1  Manifest-Version: 1.0
+   2  Main-Class: com.example.Main
+   3  Spring-Boot-Version: 3.2.1
+>>>>>>>
+<<<<<<< app.jar@BOOT-INF/lib/spring-core-6.1.0.jar@META-INF/MANIFEST.MF
+   1  Manifest-Version: 1.0
+   2  Bundle-Name: spring-core
+   ...
+>>>>>>>
+```
+
+**Class structure via ASM** — name, super, interfaces, method signatures:
+
+```text
+$ findjar ~/.m2 -t j -n DataSource.class --class-info
+<<<<<<< .../spring-jdbc-6.1.0.jar@.../DataSource.class
+class:      org.springframework.jdbc.datasource.DataSource
+access:     public, abstract, interface
+extends:    java.lang.Object
+implements: javax.sql.DataSource
+methods:
+  public abstract getConnection()Ljava/sql/Connection;
+  public abstract getConnection(Ljava/lang/String;Ljava/lang/String;)Ljava/sql/Connection;
+>>>>>>>
+```
+
+**Quiet shell-script mode** — no output, exit code 0 if any match, 1 otherwise:
+
 ```bash
-# Search the current directory for files containing "TODO":
-findjar -g TODO
+$ findjar . -n config.edn -q && echo found
+found
+$ findjar . -n probably-not-here -q || echo "missing"
+missing
+```
 
-# Glob match against file names:
-findjar -G '*.clj'
+**JSON output for jq** — one JSON Lines record per call:
 
-# Grep across a maven cache, restricted to jar entries, with 1-line context:
-findjar ~/.m2 -n clj -g 'Rich Hickey' -t j -x 1
+```text
+$ findjar . -g TODO --output json | head -2
+{"kind":"grep","path":"src/foo.clj","line":42,"hit?":true,"text":"  ;; TODO: refactor this","matches":[[5,9]]}
+{"kind":"grep","path":"src/bar.clj","line":17,"hit?":true,"text":"  ;; TODO: explain the heuristic","matches":[[5,9]]}
 
-# Print only the paths of matching files (pipe to your editor):
-findjar . -g TODO -l | xargs $EDITOR
+$ findjar . -g TODO --output json | jq -s 'group_by(.path) | map({(.[0].path): length})'
+[{"src/foo.clj":1},{"src/bar.clj":1},{"test/foo_test.clj":1}]
+```
 
-# Cat a manifest from inside a jar:
-findjar ~/.m2 -n MANIFEST.MF -c -t j
+**Multiple search roots** — paths include the root prefix so they're unambiguous:
 
-# Compute multiple hashes in one go:
-findjar ~/.m2 -n string.clj -t j -s sha1 -s md5
-
-# Find every copy of a known file by sha1:
-findjar ~/.m2 --find-by-hash sha1:da39a3ee5e6b4b0d3255bfef95601890afd80709
-
-# Recurse into nested archives (uberjars, fatjars):
-findjar app.jar --nested -n MANIFEST.MF
-
-# Quiet shell-script mode: exit 0 if any match, 1 otherwise:
-if findjar . -n config.edn -q; then echo found; fi
-
-# JSON output for jq:
-findjar . -g TODO --output json | jq -s 'group_by(.path)'
-
-# Multiple search roots, parallel-jobs limit, no gitignore:
-findjar ~/.m2 ~/.gradle -g 'CVE-' --parallel-jobs 4 --no-gitignore
+```text
+$ findjar ~/.m2 ~/.gradle -g 'CVE-' --parallel-jobs 4 --no-gitignore
+/Users/me/.m2/repository/.../some-old-lib.jar@META-INF/CVE-2021-44228.txt
+/Users/me/.gradle/caches/.../another-lib.jar@CHANGELOG:42  fixed CVE-2023-something
 ```
 
 `findjar --help` for the full option list (grouped: Filtering /
