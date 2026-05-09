@@ -15,14 +15,24 @@
 (def ^:dynamic *use-colors* true)
 
 (defn- no-color-env?
-  "Honor the NO_COLOR convention (https://no-color.org). Any non-empty value
-  of NO_COLOR disables ANSI coloring."
+  "Honor the NO_COLOR convention (https://no-color.org). Any non-empty
+  value of NO_COLOR disables ANSI coloring."
   []
   (let [v (System/getenv "NO_COLOR")]
     (and (some? v) (not= "" v))))
 
+(defn- force-color-env?
+  "Honor the FORCE_COLOR convention. Any non-empty value forces ANSI
+  coloring on regardless of TTY detection. Useful for tools like
+  freeze / asciinema that capture stdout for rendering."
+  []
+  (let [v (System/getenv "FORCE_COLOR")]
+    (and (some? v) (not= "" v) (not= "0" v))))
+
 (defn use-colors?
-  "ANSI coloring is off if -m is set or NO_COLOR is set in the environment."
+  "ANSI coloring is on unless -m is set or NO_COLOR is in the env.
+  FORCE_COLOR overrides only the TTY-detection layer (jansi disables
+  itself on non-TTY stdout); -m and NO_COLOR still win."
   [opts]
   (and (not (:monochrome opts)) (not (no-color-env?))))
 

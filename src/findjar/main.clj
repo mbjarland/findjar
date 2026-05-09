@@ -112,6 +112,18 @@
   CLI args call System/exit. Returns the JVM exit status (0 = success,
   1 = bad args / no match in quiet mode)."
   [hard-exit-on-errors? args]
+  ;; FORCE_COLOR forces ANSI passthrough regardless of TTY detection.
+  ;; Useful for tools (freeze / asciinema / svg-term / etc.) that
+  ;; capture stdout for rendering and want the escape codes preserved.
+  ;; NO_COLOR / -m still win — those come into play at the
+  ;; *use-colors* layer below jansi.
+  ;;
+  ;; Must be set BEFORE (ansi/install!) — jansi reads jansi.mode at
+  ;; install time to decide whether AnsiPrintStream strips or passes
+  ;; through ANSI escapes.
+  (when-let [v (System/getenv "FORCE_COLOR")]
+    (when (and (not= "" v) (not= "0" v))
+      (System/setProperty "jansi.mode" "force")))
   ;; Install jansi at runtime (was previously done at namespace-load time
   ;; via jansi-clj.auto, which left an AnsiPrintStream in the native-image
   ;; build heap). On Unix this is roughly a passthrough; on Windows it

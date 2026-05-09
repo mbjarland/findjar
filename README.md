@@ -15,6 +15,10 @@ clients). Regex match on file name, path, or content. Compute hashes,
 extract manifests, dump archives, pipe to `jq` — all at **~22ms cold
 start** as a native binary.
 
+<p align="center">
+  <img src="doc/img/demo.svg" alt="findjar searching ~/.m2 with colored output" width="780">
+</p>
+
 ---
 
 ## See it in 10 seconds
