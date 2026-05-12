@@ -252,6 +252,17 @@ Useful when tuning
 .B \-\-parallel\-jobs
 or when a slow scan needs reassurance that work is happening.
 .TP
+.BI \-\-why\-skipped " path"
+Diagnostic mode: instead of scanning, explain why
+.I path
+would NOT be picked up by the current flag set (default excludes,
+.IR .gitignore ,
+.BR \-\-types ,
+.BR \-\-max\-depth ,
+non-followed symlink in an ancestor, etc.).\& Prints one line per
+search-root, then exits.\& Reasonable cure for "why isn't my file
+matching?".
+.TP
 .B \-\-examples
 Print usage examples and exit.
 .TP

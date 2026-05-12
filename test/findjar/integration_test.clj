@@ -621,6 +621,36 @@
     (testing "without :null, output uses newlines"
       (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
+;; ----------------------------------------------------------------------------
+;; --why-skipped diagnostic
+
+(deftest why-skipped-recognizes-default-excluded-dirs
+  (let [r (c/why-skipped *root* (.getPath (jio/file *root* "target/junk.txt")) {})]
+    (is (string? r))
+    (is (re-find #"target" r))
+    (is (re-find #"default exclude" r))))
+
+(deftest why-skipped-recognizes-type-filter
+  ;; clj file under --types jar (no n/d) is rejected
+  (let [r (c/why-skipped *root* (.getPath (jio/file *root* "beta.clj"))
+                         {:types #{"jar"}})]
+    (is (re-find #"file extension 'clj'" r))))
+
+(deftest why-skipped-says-nil-for-scannable-file
+  (let [r (c/why-skipped *root* (.getPath (jio/file *root* "alpha.txt"))
+                         {:types #{:default}})]
+    (is (nil? r) (str "expected nil, got " (pr-str r)))))
+
+(deftest why-skipped-handles-non-existent
+  (let [r (c/why-skipped *root* "/some/path/that/does/not/exist" {})]
+    (is (re-find #"does not exist" r))))
+
+(deftest why-skipped-recognizes-gitignore
+  ;; trace.log is matched by *.log in the fixture's .gitignore
+  (let [r (c/why-skipped *root* (.getPath (jio/file *root* "trace.log")) {})]
+    (is (string? r))
+    (is (re-find #"gitignore" r))))
+
 (deftest stats-flag-does-not-break-exit-code
   ;; --stats prints to stderr at end of scan; just smoke-test the path.
   (is (= 0 (run-main (.getPath *root*) "-n" "alpha.txt" "--stats")))

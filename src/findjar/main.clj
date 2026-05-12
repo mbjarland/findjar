@@ -185,7 +185,8 @@
   (ansi/install!)
   (tufte/add-basic-println-handler! {})
   (let [{:keys [search-roots opts exit-message ok?]} (cli/validate-args args)
-        profile? (:profile opts)]
+        profile?    (:profile opts)
+        why-skipped (:why-skipped opts)]
     (cond
       exit-message
       ;; ok? true means --help / --version / --examples / --completions
@@ -197,6 +198,16 @@
           (cli/exit code exit-message)
           (do (println "would exit with code" code "msg," exit-message)
               code)))
+
+      why-skipped
+      ;; Diagnostic mode: report why the given path would be skipped, then
+      ;; exit. Per-root reasoning when multiple search roots were given.
+      (do
+        (doseq [root search-roots]
+          (let [reason (c/why-skipped root why-skipped opts)]
+            (println (str (.getPath root) ":")
+                     (or reason "would be scanned"))))
+        0)
 
       :else
       (let [matched? (tufte/profile {:when profile? :nmax 10000000}

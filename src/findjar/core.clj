@@ -905,6 +905,88 @@
   [^File search-root opts]
   (filter (valid-file-fn opts) (walk-tree search-root opts)))
 
+(defn- ancestors-up-to
+  "Return f's directory ancestors (excluding f itself), stopping at root
+  (inclusive). If f is not under root, walks all ancestors."
+  [^File root ^File f]
+  (let [root-path (when root (.getCanonicalPath root))]
+    (->> (iterate (fn [^File x] (.getParentFile x)) (.getParentFile f))
+         (take-while some?)
+         (reduce (fn [acc ^File a]
+                   (let [conj-acc (conj acc a)]
+                     (if (and root-path (= (.getCanonicalPath a) root-path))
+                       (reduced conj-acc)
+                       conj-acc)))
+                 []))))
+
+(defn why-skipped
+  "Return a human-readable explanation of why findjar would NOT scan the
+  file at file-path, given a search-root and the parsed opts. Returns nil
+  if the file would actually be scanned. Best-effort: doesn't enumerate
+  every possible cause, but pinpoints the common ones (default excludes,
+  --types filter, non-existence, symlink without --follow, max-depth) and
+  falls back to a 'try --all / --no-gitignore' hint."
+  [^File search-root ^String file-path opts]
+  (let [;; Default :types matches what the CLI does so that test callers
+        ;; passing bare opts maps don't NPE inside the type predicate.
+        opts  (cond-> (munge-regexes opts)
+                (nil? (:types opts)) (assoc :types #{:default "jar"}))
+        f     (jio/file file-path)
+        absf  (when (.exists f) (.getCanonicalFile f))]
+    (cond
+      (not (.exists f))
+      (str "path does not exist: " file-path)
+
+      (.isDirectory f)
+      (str "path is a directory; findjar scans files only")
+
+      :else
+      (let [excludes      (into (or (:exclude opts) #{})
+                                (when-not (:all opts) default-excluded-dirs))
+            ancestors     (ancestors-up-to search-root absf)
+            in-cand?      (->> (candidate-files search-root opts)
+                               (some #(= (.getCanonicalPath ^File %) (.getCanonicalPath absf)))
+                               boolean)
+            blocked-by    (some (fn [^File a]
+                                  (when (contains? excludes (.getName a))
+                                    (.getName a)))
+                                ancestors)
+            ext           (effective-ext f)
+            type-allowed? (boolean
+                            (or ((:types opts) :default)
+                                (contains? (:types opts) ext)))
+            symlink-anc   (when-not (:follow opts)
+                            (some (fn [^File a]
+                                    (when (symlink? a) (.getName a)))
+                                  ancestors))
+            depth-of      (count ancestors)
+            max-depth     (:max-depth opts)]
+        (cond
+          in-cand?
+          nil
+
+          (and (not type-allowed?) (not ext))
+          "extension-less file is not picked up by any --types entry (use 'n' to include normal disk files)"
+
+          (not type-allowed?)
+          (str "file extension '" ext "' is not in active --types " (sort (:types opts))
+               "; pass -t to widen")
+
+          blocked-by
+          (str "ancestor directory '" blocked-by "' is excluded "
+               (if (contains? default-excluded-dirs blocked-by)
+                 "by the default exclude list (--all to bypass)"
+                 "by --exclude"))
+
+          symlink-anc
+          (str "ancestor '" symlink-anc "' is a symlink and --follow is not set")
+
+          (and max-depth (< max-depth depth-of))
+          (str "depth " depth-of " exceeds --max-depth " max-depth)
+
+          :else
+          "excluded by .gitignore or a per-subdir .gitignore in an ancestor — try --all or --no-gitignore to confirm")))))
+
 (defn scan-file
   "Scan a single File against output/render-cat with already-munged opts.
   display-path is the path string (relative or absolute) to surface to the
