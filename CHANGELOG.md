@@ -7,6 +7,27 @@ build numbers.
 
 ## Unreleased
 
+### Fixed
+
+- **`--why-skipped` crashed on the native binary.** Reflection on
+  `java.io.File.getPath` failed because native-image's reachability
+  metadata didn't cover it. Added the `^File` type hint so the call
+  goes through the public method instead. Pure regression fix.
+- **Shell completions were stale.** `bash` / `zsh` / `fish`
+  completion scripts didn't mention `-i`, `-0`, `--manifest`,
+  `--manifest-summary`, `--class-info`, `--explode`,
+  `--duplicate-classes`, `--include-glob`, `--exclude-glob`,
+  `--stats`, `--why-skipped`, `--unordered`, `--recipes`,
+  `--completions`, or the `t`/`g` `--types` selectors and the new
+  `--output` values (`ndjson`, `json-array`, `sarif`). All three
+  refreshed; `clj -T:build audit-docs` now also checks completion
+  scripts for flag coverage so this can't drift silently again.
+- **`--all` help text clarified.** Previously the docs read as if
+  `--all` also bypassed `.gitignore`; it does not (and never has).
+  Now spelled out: `--all` bypasses the default-excluded directory
+  list only; combine with `--no-gitignore` for "literally
+  everything".
+
 ### Added
 
 - **`--duplicate-classes`** — classpath audit mode. Walks every

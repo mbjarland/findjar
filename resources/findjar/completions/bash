@@ -8,29 +8,37 @@ _findjar() {
   prev="${COMP_WORDS[COMP_CWORD-1]}"
 
   opts="-n --name -p --path -a --apath -G --glob -g --grep \
-        -w --word-regexp -v --invert-match -f --flags -t --types \
-        -c --cat -l --files-only --count --max-count -s --hash \
-        --find-by-hash -q --quiet -x --context -A --after -B --before \
-        --output -o --out-file -m --monochrome --all -L --follow \
-        --max-depth --exclude --no-gitignore --text --no-parallel \
-        --parallel-jobs --nested --examples --profile -V --version -h --help"
+        -w --word-regexp -v --invert-match -i --ignore-case -f --flags -t --types \
+        -c --cat --manifest --manifest-summary --class-info \
+        -l --files-only --count --max-count -s --hash --find-by-hash \
+        --explode --duplicate-classes -q --quiet \
+        -x --context -A --after -B --before \
+        --output -o --out-file -m --monochrome -0 --null \
+        --all -L --follow --max-depth --exclude \
+        --include-glob --exclude-glob \
+        --no-gitignore --text --no-parallel --parallel-jobs --unordered --nested \
+        --stats --why-skipped \
+        --examples --recipes --completions --profile -V --version -h --help"
 
   case "$prev" in
     -t|--types)
-      COMPREPLY=( $(compgen -W "n j z nj nz jz njz" -- "$cur") )
+      COMPREPLY=( $(compgen -W "n j z t g nj njz njt njg" -- "$cur") )
       return 0 ;;
     -s|--hash)
       COMPREPLY=( $(compgen -W "md5 sha1 sha256 sha512 crc32" -- "$cur") )
       return 0 ;;
     --output)
-      COMPREPLY=( $(compgen -W "text json" -- "$cur") )
+      COMPREPLY=( $(compgen -W "text json ndjson json-array sarif" -- "$cur") )
       return 0 ;;
-    -o|--out-file)
+    --completions)
+      COMPREPLY=( $(compgen -W "zsh bash fish" -- "$cur") )
+      return 0 ;;
+    -o|--out-file|--explode|--why-skipped)
       COMPREPLY=( $(compgen -f -- "$cur") )
       return 0 ;;
     -n|--name|-p|--path|-a|--apath|-G|--glob|-g|--grep|-f|--flags|\
     --max-count|-x|--context|-A|--after|-B|--before|--max-depth|\
-    --exclude|--parallel-jobs|--find-by-hash)
+    --exclude|--include-glob|--exclude-glob|--parallel-jobs|--find-by-hash)
       return 0 ;;
   esac
 

@@ -221,7 +221,7 @@
       :id :null]
 
      [nil "--all"
-      "traverse every directory. By default findjar skips .git, .svn, .hg, node_modules, target, build, .gradle, .cpcache, .idea, .vscode, plus any paths matched by .gitignore at each search-root."]
+      "bypass the default-excluded directory list (.git, .svn, .hg, .bzr, node_modules, target, build, .gradle, .cpcache, .idea, .vscode). Use --no-gitignore as well to also disable .gitignore filtering — '--all --no-gitignore' is the closest thing to 'search literally everything'."]
      ["-L" "--follow"
       "follow symbolic links (default: don't follow)"]
      [nil "--max-depth <n>"

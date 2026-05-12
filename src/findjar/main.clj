@@ -240,8 +240,10 @@
       why-skipped
       ;; Diagnostic mode: report why the given path would be skipped, then
       ;; exit. Per-root reasoning when multiple search roots were given.
+      ;; ^File hint required because native-image reflection metadata
+      ;; doesn't cover java.io.File.getPath.
       (do
-        (doseq [root search-roots]
+        (doseq [^File root search-roots]
           (let [reason (c/why-skipped root why-skipped opts)]
             (println (str (.getPath root) ":")
                      (or reason "would be scanned"))))

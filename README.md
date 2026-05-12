@@ -113,44 +113,68 @@ or bundled content.
 fatjars, Bazel/Pants bundles).
 
 🎯 **Regex everywhere** — file name, path, content; or use globs
-(`-G '*.clj'`) when regex feels heavy. `-w` for word-boundary;
-`-v` to invert.
+(`-G '*.clj'`) when regex feels heavy. `-w` for word-boundary,
+`-v` to invert, `-i` (or `-f i`) for case-insensitive,
+`--include-glob` / `--exclude-glob` (with `**` globstar) for
+path-level filtering.
 
 ⚡ **Grep-like content search** — line numbers, intra-line ANSI
 highlighting, asymmetric context (`-A` / `-B` / `-x`), `--count`,
-`--max-count`.
+`--max-count`, grep-compatible exit codes (`0`=match / `1`=no match /
+`2`=error).
 
-🐚 **Shell-script friendly** — `-q` for exit-code-only; `-l` to print
-just paths (pipe to `xargs $EDITOR`); `--output json` for `jq`.
+🐚 **Shell-script friendly** — `-q` for output-suppressed mode; `-l`
+to print just paths (pipe to `xargs`); `-0` for NUL-terminated paths
+that survive embedded spaces; `--output json` / `ndjson` /
+`json-array` / `sarif` for downstream pipelines.
 
 🔢 **Five hash algorithms** — `md5`, `sha1`, `sha256`, `sha512`,
 `crc32`. Compute several at once, or use `--find-by-hash` to locate
 every copy of a file by its digest (great for tracking down which
 library shipped a particular class).
 
-📦 **Beyond jar/zip** — also reads inside `.tar`, `.tar.gz`, `.tgz`
-archives (`-t t`).
+📦 **Beyond jar/zip** — also reads inside `.tar` / `.tar.gz` / `.tgz`
+(`-t t`) and bare `.gz` log files / dumps (`-t g`, entry path is
+`foo.log.gz@foo.log`).
 
 📜 **`--manifest`** — for each matched jar, dump `META-INF/MANIFEST.MF`
 and any `pom.properties` without you having to know the exact path.
+`--manifest-summary` is the filtered version: parses via
+`java.util.jar.Manifest` and keeps only a curated allow-list
+(Main-Class, Implementation-*, Bundle-*, Class-Path, …).
 
 ☕ **`--class-info`** — parse `.class` entries via ASM and print the
 class name, access modifiers, super, interfaces, and method
 signatures. Combines with `--output json` for *"list every class that
 implements Serializable"* pipelines.
 
+🔬 **`--duplicate-classes`** — the JVM-classpath kill shot. Walks every
+`.class` across the search roots (combine with `--nested` for
+uberjars), groups by FQN, and reports any class that lives in two or
+more jars with the sha1 of each copy. Most-likely cause of mysterious
+`NoSuchMethodError` in production.
+
+📤 **`--explode <dir>`** — extract every matched entry to disk,
+preserving the archive layout (`@` separators become directory
+boundaries). Composes with `--nested`, `-n`, `-g`, etc.
+
+🔭 **Diagnostic mode** — `--stats` prints a one-line scan summary on
+stderr; `--why-skipped <path>` walks the filter chain and tells you
+which rule excluded a given file.
+
 🏎️ **Fast startup, parallel scan** — ~22ms cold start as a native
 binary; parallel by default with `--parallel-jobs N` and
-`--no-parallel` knobs. Output is byte-for-byte identical to the
-serial path.
+`--no-parallel` knobs. `--unordered` lets workers emit hits as they
+find them (for `… | head` on huge corpora).
 
 🧠 **Smart defaults** — defaults to `.` if no root given, accepts
 multiple roots, skips `.git` / `node_modules` / `target` / `build` /
 etc., honors `.gitignore` and `NO_COLOR`, doesn't follow symlinks,
 skips binary files when grepping. Override any of them with one flag.
 
-📚 **Documented** — embedded `--examples`, man page, shell
-completions for zsh / bash / fish via `findjar --completions <shell>`.
+📚 **Documented** — embedded `--examples`, `--recipes` (workflow
+cookbook), man page, shell completions for zsh / bash / fish via
+`findjar --completions <shell>`.
 
 ---
 

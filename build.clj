@@ -197,13 +197,15 @@
 
 (defn audit-docs
   "Best-effort coverage check: walk findjar's --help output, extract
-  every long flag name, and warn if any is missing from the man
-  page. Catches the common drift case where a CLI option was added
-  but the hand-edited man page wasn't updated.
+  every long flag name, and warn if any is missing from any of:
 
-  The README intentionally describes most flags by their short form
-  (-c, -n, -g, ...) for brevity, so README coverage is left as a
-  manual pre-release scan rather than an automated check.
+    - man/findjar.1  (full prose reference)
+    - resources/findjar/completions/{bash,zsh,fish}  (shell completion)
+
+  Catches the common drift case where a CLI option was added but a
+  hand-edited surface wasn't updated. The README intentionally uses
+  short forms for brevity, so README coverage is left as a manual
+  pre-release scan rather than an automated check.
 
   Does not fail the build — prose drift always needs a human read.
   Run via 'clj -T:build audit-docs' or as part of regen-docs."
@@ -217,17 +219,32 @@
         ;; Strip groff backslash escapes (\-\- / \-) so '\-\-name' in
         ;; the man page reads as '--name' for the includes? check.
         man-text (str/replace (slurp "man/findjar.1") "\\-" "-")
+        bash-text (slurp "resources/findjar/completions/bash")
+        zsh-text  (slurp "resources/findjar/completions/zsh")
+        fish-text (slurp "resources/findjar/completions/fish")
         ;; Extract long flags from --help output.
         flags    (->> (re-seq #"--[a-z][a-z0-9-]+" (or out ""))
                       (remove #{"--" "--help" "--examples" "--version"
                                 "--monochrome"})
                       distinct
                       sort)
-        missing  (remove #(str/includes? man-text %) flags)]
-    (log "audit-docs: checking" (count flags) "long flags against man/findjar.1")
-    (if (seq missing)
-      (log "WARN man/findjar.1 missing:" (str/join " " missing))
-      (log "ok   man/findjar.1 covers every long flag"))))
+        ;; Fish completion uses `-l flag-name` instead of `--flag-name`,
+        ;; so accept either form when checking presence.
+        present? (fn [text ^String flag]
+                   (let [bare (subs flag 2)]  ; "--foo" -> "foo"
+                     (or (str/includes? text flag)
+                         (str/includes? text (str "-l " bare)))))
+        check    (fn [label text]
+                   (let [missing (remove #(present? text %) flags)]
+                     (if (seq missing)
+                       (log "WARN" label "missing:" (str/join " " missing))
+                       (log "ok  " label "covers every long flag"))))]
+    (log "audit-docs: checking" (count flags) "long flags across"
+         "man/findjar.1 and the three completion scripts")
+    (check "man/findjar.1                          " man-text)
+    (check "resources/findjar/completions/bash     " bash-text)
+    (check "resources/findjar/completions/zsh      " zsh-text)
+    (check "resources/findjar/completions/fish     " fish-text)))
 
 (defn regen-docs
   "One-shot pre-release doc regen:

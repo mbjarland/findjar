@@ -14,35 +14,49 @@ _findjar() {
     '(-g --grep)'{-g,--grep}'[match against file content lines (regex)]:regex' \
     '(-w --word-regexp)'{-w,--word-regexp}'[grep with word boundaries]' \
     '(-v --invert-match)'{-v,--invert-match}'[emit non-matching lines]' \
+    '(-i --ignore-case)'{-i,--ignore-case}'[case-insensitive shortcut for -f i]' \
     '(-f --flags)'{-f,--flags}'[regex flags (i m s u x d)]:flags' \
-    '(-t --types)'{-t,--types}'[restrict file types]:types:(n j z nj nz jz njz)' \
+    '(-t --types)'{-t,--types}'[restrict file types]:types:(n j z t g nj njz njt njg)' \
     '(-c --cat)'{-c,--cat}'[print contents of matching files]' \
+    '--manifest[dump MANIFEST.MF / pom.properties of matched jars]' \
+    '--manifest-summary[filtered manifest dump: curated allow-list]' \
+    '--class-info[parse .class entries via ASM; print structure]' \
     '(-l --files-only)'{-l,--files-only}'[print only matching paths]' \
     '--count[print only the count of matches per file]' \
     '--max-count[stop after <n> matches per file]:n' \
     '(-s --hash)'{-s,--hash}'[print file hash]:algo:(md5 sha1 sha256 sha512 crc32)' \
     '--find-by-hash[find files by hash <algo>:<hex>]:spec' \
-    '(-q --quiet)'{-q,--quiet}'[suppress output, exit 0/1 on match]' \
+    '--explode[extract matched entries to dir, preserving archive layout]:dir:_files -/' \
+    '--duplicate-classes[classpath audit: list classes in 2+ jars with hashes]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output, grep-compatible exit code]' \
     '(-x --context)'{-x,--context}'[lines of symmetric context]:n' \
     '(-A --after)'{-A,--after}'[lines of after-context]:n' \
     '(-B --before)'{-B,--before}'[lines of before-context]:n' \
-    '--output[output format]:fmt:(text json)' \
+    '--output[output format]:fmt:(text json ndjson json-array sarif)' \
     '(-o --out-file)'{-o,--out-file}'[append cat output to file]:file:_files' \
     '(-m --monochrome)'{-m,--monochrome}'[disable ANSI coloring]' \
-    '--all[traverse every directory (no skipping)]' \
+    '(-0 --null)'{-0,--null}'[NUL-terminate paths (xargs -0)]' \
+    '--all[bypass default-excluded directory list]' \
     '(-L --follow)'{-L,--follow}'[follow symbolic links]' \
     '--max-depth[limit traversal depth]:n' \
     '*--exclude[skip directories with this name (repeatable)]:name' \
+    '*--include-glob[only scan paths matching glob (relative, ** allowed)]:glob' \
+    '*--exclude-glob[skip paths matching glob (relative, ** allowed)]:glob' \
     '--no-gitignore[do not honor .gitignore]' \
     '--text[do not skip binary files when grepping]' \
     '--no-parallel[scan files serially]' \
     '--parallel-jobs[cap concurrent scan workers]:n' \
+    '--unordered[in parallel mode, emit hits as workers find them]' \
     '--nested[recurse into jars-inside-jars]' \
+    '--stats[print one-line scan summary to stderr]' \
+    '--why-skipped[diagnose why a path would be excluded]:path:_files' \
     '--examples[print usage examples and exit]' \
+    '--recipes[print workflow cookbook and exit]' \
+    '--completions[print completion script]:shell:(zsh bash fish)' \
     '--profile[enable tufte profiling]' \
     '(-V --version)'{-V,--version}'[print version and exit]' \
     '(-h --help)'{-h,--help}'[show help and exit]' \
-    '*:search-root:_files -/'
+    '*:search-root:_files'
 }
 
 _findjar "$@"

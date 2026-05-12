@@ -101,11 +101,13 @@ Output:
                                  instead of newline (for xargs -0)
 
 Scanning:
-      --all                      traverse every directory. By default findjar 
-                                 skips .git, .svn, .hg, node_modules, target, 
-                                 build, .gradle, .cpcache, .idea, .vscode, 
-                                 plus any paths matched by .gitignore at each 
-                                 search-root.
+      --all                      bypass the default-excluded directory list 
+                                 (.git, .svn, .hg, .bzr, node_modules, 
+                                 target, build, .gradle, .cpcache, .idea, 
+                                 .vscode). Use --no-gitignore as well to also 
+                                 disable .gitignore filtering — '--all 
+                                 --no-gitignore' is the closest thing to 
+                                 'search literally everything'.
   -L, --follow                   follow symbolic links (default: don't 
                                  follow)
       --max-depth <n>            do not descend more than <n> directory 
@@ -155,5 +157,5 @@ Misc:
   -V, --version                  print version and exit
   -h, --help                     show this help and exit
 
-findjar 1.0.173 - 63a491e - 2026.05.12 15:50:46
+findjar 1.0.177 - 59c6221 - 2026.05.12 17:05:37 +
 

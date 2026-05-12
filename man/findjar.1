@@ -244,7 +244,7 @@ even when paths contain spaces, quotes, or embedded newlines.
 .SS Scanning
 .TP
 .B \-\-all
-Traverse every directory.\& By default findjar skips
+Bypass the default-excluded directory list:
 .IR .git ,
 .IR .svn ,
 .IR .hg ,
@@ -255,10 +255,15 @@ Traverse every directory.\& By default findjar skips
 .IR .gradle ,
 .IR .cpcache ,
 .IR .idea ,
-.IR .vscode ,
-plus any paths matched by
+.IR .vscode .\&
+.B \-\-all
+does NOT disable
 .I .gitignore
-at each search-root.
+filtering — combine with
+.B \-\-no\-gitignore
+if you want both layers off (the closest thing to "search literally
+everywhere" is
+.BR "--all --no-gitignore" ).
 .TP
 .BR \-L ", " \-\-follow
 Follow symbolic links during traversal (default: don't follow).
