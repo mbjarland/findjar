@@ -91,7 +91,7 @@ You probably already use one of these. Here's where each falls short:
 | You currently use | Limitation findjar removes |
 |---|---|
 | **`grep -r`** | Can't see inside jar/zip/tar archives. |
-| **`zgrep` / `zcat | grep`** | Treats a `.tar.gz` as one opaque stream — no per-entry results, no idea which file inside matched. |
+| **`zgrep` / `zcat \| grep`** | Treats a `.tar.gz` as one opaque stream — no per-entry results, no idea which file inside matched. |
 | **`unzip -p` ‖ `for f in $(find ...); do …`** | Verbose, fragile, no parallelism, no nested-jar recursion. |
 | **`jar -tf` ‖ `unzip -l`** | Lists entries but can't grep their content. |
 | **`rg` (ripgrep)** | Native to text files; archive support is bolted on (and slower). |
