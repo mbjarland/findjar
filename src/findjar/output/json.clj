@@ -89,6 +89,72 @@
     (duplicate-class [_ fqn occurrences _opts]            (emit-line! (record-of :duplicate  [fqn occurrences])))))
 
 ;; ----------------------------------------------------------------------------
+;; SARIF (Static Analysis Results Interchange Format) — JSON schema that
+;; GitHub Code Scanning and many security pipelines consume directly.
+;; Each findjar event becomes a SARIF 'result' object with a ruleId, a
+;; severity level, a free-text message, and a location. main.clj wraps
+;; the result stream in the outer SARIF run/tool boilerplate.
+
+(defn- artifact-loc [path] {:artifactLocation {:uri path}})
+
+(defn- sarif-result-of [kind args]
+  (case kind
+    :warn       {:ruleId "warn"  :level "warning"
+                 :message {:text (first args)}}
+    :match      {:ruleId "match" :level "note"
+                 :message {:text "Matched file"}
+                 :locations [{:physicalLocation (artifact-loc (first args))}]}
+    :grep       (let [{:keys [path line-# hit? line]} (first args)]
+                  (when hit?
+                    {:ruleId "grep" :level "note"
+                     :message {:text (str "Pattern matched: " line)}
+                     :locations [{:physicalLocation
+                                  (assoc (artifact-loc path)
+                                         :region {:startLine (inc line-#)})}]}))
+    :count      {:ruleId "count" :level "note"
+                 :message {:text (str (second args) " matching line(s)")}
+                 :locations [{:physicalLocation (artifact-loc (first args))}]}
+    :class-info {:ruleId "class-info" :level "note"
+                 :message {:text (str "Class: " (:name (second args)))}
+                 :locations [{:physicalLocation (artifact-loc (first args))}]}
+    :hash       (let [[path htype hval] args]
+                  {:ruleId (str "hash-" (name htype)) :level "note"
+                   :message {:text (str (name htype) " " hval)}
+                   :locations [{:physicalLocation (artifact-loc path)}]})
+    :duplicate  (let [[fqn occs] args]
+                  {:ruleId "duplicate-class" :level "error"
+                   :message {:text (str "Class '" fqn "' appears in "
+                                        (count occs) " jar(s) ("
+                                        (count (distinct (map :hash occs)))
+                                        " distinct sha1)")}
+                   :locations (mapv (fn [o]
+                                      {:physicalLocation (artifact-loc (:path o))})
+                                    occs)})
+    nil))
+
+(defn sarif-output
+  "FindJarOutput emitting SARIF 2.1.0 result objects, joined by commas.
+  Caller emits the wrapping document (tool/run/results boilerplate)
+  before and after the scan."
+  []
+  (let [first? (atom true)
+        emit! (fn [r]
+                (when r
+                  (when-not @first? (print ","))
+                  (reset! first? false)
+                  (print (write-value r))
+                  (.flush *out*)))]
+    (reify p/FindJarOutput
+      (warn        [_ msg _ex _opts]                       (emit! (sarif-result-of :warn       [msg])))
+      (match       [_ path _opts]                          (emit! (sarif-result-of :match      [path])))
+      (grep-match  [_ _max-# m _opts]                      (emit! (sarif-result-of :grep       [m])))
+      (grep-count  [_ path n _opts]                        (emit! (sarif-result-of :count      [path n])))
+      (class-info  [_ path info _opts]                     (emit! (sarif-result-of :class-info [path info])))
+      (dump-stream [_ _ _ _]                               nil)   ; cat is not a finding
+      (print-hash  [_ path hash-type hash-value _opts]     (emit! (sarif-result-of :hash       [path hash-type hash-value])))
+      (duplicate-class [_ fqn occurrences _opts]           (emit! (sarif-result-of :duplicate  [fqn occurrences]))))))
+
+;; ----------------------------------------------------------------------------
 ;; json-array emitter — same records, wrapped in a single top-level JSON
 ;; array so consumers can use `jq` directly without `-s`. main.clj emits the
 ;; opening '[' before the scan and the closing ']' after; this sink handles

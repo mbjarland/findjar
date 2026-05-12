@@ -300,6 +300,13 @@ Examples:
 
      @|bold ~> findjar . -g "TODO" --output json-array | jq 'group_by(.path)'|@
 
+     SARIF 2.1.0 output for GitHub Code Scanning + similar pipelines.
+     Duplicate-class collisions are level=error, warnings are
+     level=warning, plain matches are level=note:
+
+     @|bold ~> findjar ~/.m2 -t j --nested --duplicate-classes --output sarif > findjar.sarif|@
+     @|bold ~> findjar . --find-by-hash sha1:da39a3ee... --output sarif|@
+
      a) Count TODOs per file:
 
      @|bold ~> findjar . -g "TODO" --output json | jq -s 'group_by(.path) | map({path: .[0].path, count: length})'|@

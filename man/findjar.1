@@ -206,11 +206,20 @@ Output format:
 .B json
 (or its alias
 .BR ndjson )
-emitting one JSON object per line (JSON Lines / jsonl), or
+emitting one JSON object per line (JSON Lines / jsonl),
 .B json-array
 emitting a single top-level JSON array (jq-friendly without
 .BR "-s" ;
-the array is empty when nothing matched).
+the array is empty when nothing matched), or
+.B sarif
+emitting a SARIF 2.1.0 document — drop-in compatible with GitHub Code
+Scanning and similar security pipelines.\& Every findjar event becomes
+a SARIF result; duplicate-classes is
+.IR level=error ,
+warnings are
+.IR level=warning ,
+everything else is
+.IR level=note .
 .TP
 .BI \-o " path" ", " \-\-out\-file " path"
 With

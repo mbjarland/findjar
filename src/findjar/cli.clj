@@ -205,12 +205,12 @@
      ["-G" "--glob <pattern>"
       "match against file name as a glob (e.g. '*.clj') instead of regex (-n)"]
      [nil "--output <fmt>"
-      "output format: text (default), json or ndjson (one JSON object per line, the JSON Lines format), or json-array (single top-level JSON array, jq-friendly without -s)"
+      "output format: text (default), json/ndjson (one JSON object per line, the JSON Lines format), json-array (single top-level JSON array), or sarif (SARIF 2.1.0 for GitHub Code Scanning and similar pipelines)"
       :id :output
       :default :text
       :parse-fn keyword
-      :validate [#{:text :json :ndjson :json-array}
-                 "must be 'text', 'json', 'ndjson', or 'json-array'"]]
+      :validate [#{:text :json :ndjson :json-array :sarif}
+                 "must be 'text', 'json', 'ndjson', 'json-array', or 'sarif'"]]
      ["-o" "--out-file <path>"
       "with -c, append output to file instead of stdout"
       :parse-fn jio/as-file]

@@ -127,13 +127,30 @@
     (match-tracking-output
       (cond
         (:quiet opts)              (silent-output)
+        (= :sarif fmt)             (json-out/sarif-output)
         (= :json-array fmt)        (json-out/json-array-output)
         (#{:json :ndjson} fmt)     (json-out/json-output)
         :else                      (default-output)))))
 
+(defn- sarif-prologue [version]
+  ;; The result list goes after this prefix; the matching epilogue closes
+  ;; the array, the run object, and the document.
+  (str "{\"version\":\"2.1.0\","
+       "\"$schema\":\"https://json.schemastore.org/sarif-2.1.0.json\","
+       "\"runs\":[{"
+       "\"tool\":{\"driver\":{"
+       "\"name\":\"findjar\","
+       "\"informationUri\":\"https://github.com/mbjarland/findjar\","
+       "\"version\":\"" version "\"}},"
+       "\"results\":["))
+
+(def ^:private sarif-epilogue "]}]}")
+
 (defn- run-scan [search-roots opts]
   (let [output       (pick-output opts)
-        json-array?  (= :json-array (:output opts))
+        fmt          (:output opts)
+        json-array?  (= :json-array fmt)
+        sarif?       (= :sarif fmt)
         stats?       (:stats opts)
         examined     (atom 0)
         dup-acc      (when (:duplicate-classes opts) (atom {}))
@@ -152,20 +169,21 @@
                        (assoc :examined-counter examined)
                        dup-acc
                        (assoc :duplicate-classes-acc dup-acc))]
-    ;; json-array prologue: open bracket BEFORE the scan so the output is
-    ;; valid JSON even when nothing matches. The output sink emits commas
-    ;; between records; we close the bracket after the scan.
-    (when json-array? (print "["))
+    ;; Format prologue (bracket / SARIF document head).
+    (cond json-array? (print "[")
+          sarif?      (print (sarif-prologue (cli/version-string))))
     (doseq [root search-roots]
       (scan root output r/render-cat opts))
     ;; --duplicate-classes post-scan emission: walk the accumulator,
     ;; emit one duplicate-class event per FQN with 2+ occurrences. The
-    ;; output sink handles formatting (text / json / json-array).
+    ;; output sink handles formatting (text / json / json-array / sarif).
     (when dup-acc
       (doseq [[fqn occs] (sort-by key @dup-acc)
               :when (>= (count occs) 2)]
         (p/duplicate-class output fqn occs opts)))
-    (when json-array? (println "]"))
+    ;; Format epilogue (close bracket / close SARIF document).
+    (cond json-array? (println "]")
+          sarif?      (println sarif-epilogue))
     (when stats?
       (let [elapsed-s (/ (- (System/currentTimeMillis) start-ms) 1000.0)]
         (binding [*out* *err*]

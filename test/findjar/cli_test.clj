@@ -145,14 +145,15 @@
   (is (true? (:no-gitignore (:opts (parsed "/tmp" "--no-gitignore"))))))
 
 (deftest output-format-flag
-  (testing "text / json / ndjson / json-array all parse"
+  (testing "text / json / ndjson / json-array / sarif all parse"
     (is (= :text       (:output (:opts (parsed "/tmp" "--output" "text")))))
     (is (= :json       (:output (:opts (parsed "/tmp" "--output" "json")))))
     (is (= :ndjson     (:output (:opts (parsed "/tmp" "--output" "ndjson")))))
-    (is (= :json-array (:output (:opts (parsed "/tmp" "--output" "json-array"))))))
+    (is (= :json-array (:output (:opts (parsed "/tmp" "--output" "json-array")))))
+    (is (= :sarif      (:output (:opts (parsed "/tmp" "--output" "sarif"))))))
   (testing "unknown format rejected"
     (let [r (parsed "/tmp" "--output" "yaml")]
-      (is (str/includes? (:exit-message r) "must be 'text', 'json', 'ndjson', or 'json-array'")))))
+      (is (str/includes? (:exit-message r) "must be 'text', 'json', 'ndjson', 'json-array', or 'sarif'")))))
 
 (deftest after-before-flags
   (is (= 3 (:after  (:opts (parsed "/tmp" "-A" "3")))))
