@@ -62,20 +62,41 @@
                  path)))))
 
 ;;;; ---------------------------------------------------------------------------
-;;;; Quiet output: suppresses all emission and tracks "did anything match?"
-;;;; so -main can pick a 0/1 exit code.
+;;;; Silent output (-q): suppresses every call. Match-tracking is the
+;;;; wrapper's job — see match-tracking-output below.
 
-(defn- quiet-output []
+(defn- silent-output []
+  (reify p/FindJarOutput
+    (warn        [_ _ _ _]   nil)
+    (match       [_ _ _]     nil)
+    (grep-match  [_ _ _ _]   nil)
+    (grep-count  [_ _ _ _]   nil)
+    (class-info  [_ _ _ _]   nil)
+    (dump-stream [_ _ _ _]   nil)
+    (print-hash  [_ _ _ _ _] nil)))
+
+;;;; ---------------------------------------------------------------------------
+;;;; Match-tracking wrapper: records whether any match-producing call ever
+;;;; fired against the wrapped sink. -main reads the flag via saw-match? to
+;;;; pick a grep-compatible exit code (0 if matched, 1 if not).
+
+(defn- match-tracking-output [delegate]
   (let [matched? (atom false)]
     (with-meta
       (reify p/FindJarOutput
-        (warn        [_ _ _ _]   nil)
-        (match       [_ _ _]     (reset! matched? true))
-        (grep-match  [_ _ _ _]   (reset! matched? true))
-        (grep-count  [_ _ _ _]   (reset! matched? true))
-        (class-info  [_ _ _ _]   (reset! matched? true))
-        (dump-stream [_ _ _ _]   (reset! matched? true))
-        (print-hash  [_ _ _ _ _] (reset! matched? true)))
+        (warn        [_ msg ex opts]   (p/warn        delegate msg ex opts))
+        (match       [_ path opts]     (reset! matched? true)
+                                       (p/match       delegate path opts))
+        (grep-match  [_ max-# m opts]  (reset! matched? true)
+                                       (p/grep-match  delegate max-# m opts))
+        (grep-count  [_ path n opts]   (reset! matched? true)
+                                       (p/grep-count  delegate path n opts))
+        (class-info  [_ path i opts]   (reset! matched? true)
+                                       (p/class-info  delegate path i opts))
+        (dump-stream [_ path s opts]   (reset! matched? true)
+                                       (p/dump-stream delegate path s opts))
+        (print-hash  [_ p t v opts]    (reset! matched? true)
+                                       (p/print-hash  delegate p t v opts)))
       {::matched? matched?})))
 
 (defn- saw-match? [out]
@@ -85,14 +106,14 @@
 ;;;; Entry point
 
 (defn- pick-output [opts]
-  (cond
-    (:quiet opts)             (quiet-output)
-    (= :json (:output opts))  (json-out/json-output)
-    :else                     (default-output)))
+  (match-tracking-output
+    (cond
+      (:quiet opts)             (silent-output)
+      (= :json (:output opts))  (json-out/json-output)
+      :else                     (default-output))))
 
 (defn- run-scan [search-roots opts]
-  (let [quiet?  (:quiet opts)
-        output  (pick-output opts)
+  (let [output  (pick-output opts)
         scan    (if (false? (:parallel opts))
                   c/perform-scan
                   buf/parallel-scan)
@@ -105,12 +126,19 @@
                   (assoc :include-root? true))]
     (doseq [root search-roots]
       (scan root output r/render-cat opts))
-    (when quiet? (saw-match? output))))
+    (saw-match? output)))
 
 (defn main-entrypoint
   "Shared by -main and repl-main. hard-exit-on-errors? controls whether bad
-  CLI args call System/exit. Returns the JVM exit status (0 = success,
-  1 = bad args / no match in quiet mode)."
+  CLI args call System/exit.
+
+  Exit-code convention (grep-compatible):
+    0  at least one match was emitted
+    1  no match
+    2  bad CLI args or other pre-scan error
+
+  hard-exit-on-errors? false means we return the code instead of calling
+  System/exit, so a REPL session can drive main-entrypoint without dying."
   [hard-exit-on-errors? args]
   ;; FORCE_COLOR forces ANSI passthrough regardless of TTY detection.
   ;; Useful for tools (freeze / asciinema / svg-term / etc.) that
@@ -134,15 +162,20 @@
         profile? (:profile opts)]
     (cond
       exit-message
-      (if hard-exit-on-errors?
-        (cli/exit (if ok? 0 1) exit-message)
-        (do (println "would exit with code" (if ok? 0 1) "msg," exit-message)
-            (if ok? 0 1)))
+      ;; ok? true means --help / --version / --examples / --completions
+      ;; printed something informational and we should exit 0. ok? false
+      ;; means bad args / nonexistent search root etc., which is exit 2
+      ;; under grep semantics.
+      (let [code (if ok? 0 2)]
+        (if hard-exit-on-errors?
+          (cli/exit code exit-message)
+          (do (println "would exit with code" code "msg," exit-message)
+              code)))
 
       :else
       (let [matched? (tufte/profile {:when profile? :nmax 10000000}
                                     (run-scan search-roots opts))]
-        (if (:quiet opts) (if matched? 0 1) 0)))))
+        (if matched? 0 1)))))
 
 (defn -main [& args]
   (let [status (try

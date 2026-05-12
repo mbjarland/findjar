@@ -539,6 +539,41 @@
       (is (= serial-paths parallel-paths)))))
 
 ;; ----------------------------------------------------------------------------
+;; Exit codes — grep-compatible: 0 if match, 1 if not, 2 on bad CLI args.
+
+(defn- run-main
+  "Drive findjar.main/main-entrypoint with stdout / stderr suppressed,
+  returning the exit code. hard-exit? = false so System/exit is never
+  called and the function just returns the code."
+  [& args]
+  (binding [*out* (java.io.StringWriter.)
+            *err* (java.io.StringWriter.)]
+    (main/main-entrypoint false args)))
+
+(deftest exit-code-0-when-match-found
+  (is (= 0 (run-main (.getPath *root*) "-n" "alpha.txt"))))
+
+(deftest exit-code-1-when-no-match
+  (is (= 1 (run-main (.getPath *root*)
+                     "-n" "definitely-not-a-real-filename-12345"))))
+
+(deftest exit-code-1-when-grep-matches-nothing
+  (is (= 1 (run-main (.getPath *root*) "-g" "ZZZZZ-not-here"))))
+
+(deftest exit-code-2-on-bad-cli-args
+  (is (= 2 (run-main "/nonexistent/path/please")))
+  (is (= 2 (run-main (.getPath *root*) "-t" "x"))))
+
+(deftest exit-code-0-on-help-flag
+  ;; --help is informational, exit 0
+  (is (= 0 (run-main "--help"))))
+
+(deftest exit-code-quiet-mode-is-grep-compatible
+  ;; -q just suppresses output; exit code is the same as without -q.
+  (is (= 0 (run-main (.getPath *root*) "-n" "alpha.txt" "-q")))
+  (is (= 1 (run-main (.getPath *root*) "-n" "nope-not-here" "-q"))))
+
+;; ----------------------------------------------------------------------------
 ;; Directory entries inside an archive must NOT contribute to action output
 ;; (hashing, cat, grep, find-by-hash, class-info, manifest). They were
 ;; previously hashed, producing da39a3ee... (sha1 of empty) for every

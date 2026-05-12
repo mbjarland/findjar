@@ -247,16 +247,21 @@ Enable tufte profiling.\& Developer flag; emits per-pass timing summaries to std
 Show help and exit.
 
 .SH EXIT STATUS
+Grep-compatible.
 .TP
 .B 0
-Success (or, with
-.BR \-q ,
-at least one match was found).
+At least one match was emitted.
 .TP
 .B 1
-Bad CLI args, or
-.B \-q
-was set and nothing matched.
+No match was found.
+.TP
+.B 2
+Bad CLI args or other pre-scan error (e.g.
+.IR "search root not found" ).
+.PP
+Note: per-file errors during a scan (unreadable jar, truncated archive)
+are surfaced as warnings on stderr and do not change the exit status —
+the status is decided solely by whether any match was emitted.
 
 .SH ENVIRONMENT
 .TP

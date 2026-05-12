@@ -7,6 +7,27 @@ build numbers.
 
 ## Unreleased
 
+### Breaking
+
+- **Exit codes are now grep-compatible**: `0` if at least one match was
+  emitted, `1` if no match, `2` on bad CLI args or pre-scan errors.
+  Previously findjar always exited `0` unless `-q` was set. Scripts
+  that relied on findjar's old "always-0 unless -q" behaviour to
+  detect *whether the scan ran* now need to switch to checking for
+  `$? -le 1` or using `-q` plus an explicit success path.
+- **`--quiet` no longer changes exit-code semantics** — it only
+  suppresses output. The grep-compatible status is in effect
+  regardless of `-q`.
+
+### Fixed
+
+- **Directory entries no longer get hashed / cat'd / grepped.** ZIP
+  / JAR entries whose path ends with `/` (e.g. `META-INF/`,
+  `BOOT-INF/lib/`) used to receive a `da39a3ee...` sha1 (the digest
+  of empty bytes) and empty `<<<<<<< ... >>>>>>>` cat blocks. They
+  now appear only in the default path-listing mode where the
+  directory's path is itself useful.
+
 ## 1.0.147
 
 ### Added

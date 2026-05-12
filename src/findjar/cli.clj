@@ -173,7 +173,7 @@
       :id :find-by-hash
       :assoc-fn (fn [m k v] (update m k (fnil conj []) v))]
      ["-q" "--quiet"
-      "suppress all output. Exit status 0 if any match was found, 1 otherwise"]
+      "suppress all output. Exit status is always grep-compatible: 0 if any match was emitted, 1 if not, 2 on bad args"]
 
      ["-x" "--context <#>"
       "with -g, show <#> lines of symmetric context around each match"
