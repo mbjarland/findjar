@@ -142,6 +142,19 @@ Convenience wrapper: runs `snapshot-docs` then `audit-docs`. The
 recommended pre-release entry point — see
 [Cutting a release § 0](#0-regenerate-docs-and-audit-hand-edited-surfaces).
 
+### `:bench` alias
+
+Not a build task — a separate runtime alias backed by `bench/findjar/bench.clj`:
+
+```bash
+clj -M:bench
+```
+
+Runs `criterium/quick-benchmark` against the hot paths (compile-glob,
+match-idxs, perform-scan over the test fixture). About a minute on a
+warm JVM. Use it to compare nanoseconds-per-op before and after a
+perf-sensitive change.
+
 ---
 
 ## Release pipeline
