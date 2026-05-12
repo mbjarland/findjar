@@ -622,6 +622,24 @@
       (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
 ;; ----------------------------------------------------------------------------
+;; .gz log-file support (--types g)
+
+(deftest gz-scanner-treats-file-as-single-entry-archive
+  (let [paths (set (ro/paths-of
+                     (run {:types #{"gz"}})
+                     :match))]
+    (testing "entry path is foo.log.gz@foo.log (.gz suffix stripped)"
+      (is (contains? paths "access.log.gz@access.log")))))
+
+(deftest gz-scanner-grep-matches-unwrapped-content
+  (let [out  (run {:types #{"gz"} :grep #"ERROR"})
+        hits (->> (ro/calls-of out)
+                  (filter #(= :grep (first %)))
+                  (filter (comp :hit? #(nth % 2))))]
+    (is (pos? (count hits)))
+    (is (every? #(re-find #"^access\.log\.gz@" (:path (nth % 2))) hits))))
+
+;; ----------------------------------------------------------------------------
 ;; --include-glob / --exclude-glob: path-level glob filtering.
 
 (deftest exclude-glob-prunes-matching-paths

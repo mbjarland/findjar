@@ -546,6 +546,29 @@
 
 (declare scan-jar scan-disk-file)
 
+(defn- scan-gz
+  "Treat a single .gz file (e.g. a rotated log file) as a one-entry virtual
+  archive. Unwraps with GZIPInputStream and feeds the resulting stream
+  through handle-match. The synthetic entry name is the basename minus
+  the trailing .gz so the @-separated path reads like other archives."
+  [^File f path opts output render-cat]
+  (let [name       (.getName f)
+        lower      (str/lower-case name)
+        entry-name (cond
+                     (.endsWith lower ".gz") (subs name 0 (- (count name) 3))
+                     :else                   name)
+        full-path  (str (str/trim path) \@ entry-name)
+        stream-factory
+        #(java.util.zip.GZIPInputStream. (jio/input-stream f))]
+    (try
+      (handle-match output opts entry-name full-path stream-factory render-cat)
+      (catch Exception e
+        (p/warn output
+                (str (.getSimpleName (class e)) " unwrapping " (.getPath f)
+                     " - " (.getMessage e))
+                e
+                opts)))))
+
 (def file-finders
   "Registry of file-type handlers. Keys are file extensions (lowercased) or
   :default for normal disk files. Each entry has:
@@ -572,7 +595,12 @@
                         (scan-tar f path opts output render-cat))
              :desc    "files in tar / tar.gz / tgz archives"
              :default false
-             :char    \t}})
+             :char    \t}
+   "gz"     {:scan    (fn [f path opts output render-cat]
+                        (scan-gz f path opts output render-cat))
+             :desc    "contents of .gz files (e.g. rotated log files)"
+             :default false
+             :char    \g}})
 
 (defn- tar-extension?
   "True if name has a multi-part tar extension (.tar.gz, .tar.bz2, etc.).

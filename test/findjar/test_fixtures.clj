@@ -149,6 +149,13 @@
       (let [out (jio/file root "demo.tar.gz")]
         (with-open [os (java.util.zip.GZIPOutputStream. (jio/output-stream out))]
           (.write os tar-bytes))))
+    ;; A .gz "log file": access.log.gz containing a few lines for the
+    ;; -t g (gzip log) type tests.
+    (let [content "INFO 2026-05-12 ok\nERROR 2026-05-12 bad\nINFO 2026-05-12 done\n"
+          out     (jio/file root "access.log.gz")]
+      (jio/make-parents out)
+      (with-open [os (java.util.zip.GZIPOutputStream. (jio/output-stream out))]
+        (.write os (.getBytes content "UTF-8"))))
     ;; A real .class file for --class-info tests. Generate via ASM so
     ;; the bytes are guaranteed valid for the parser we use in core.
     (let [cw (org.objectweb.asm.ClassWriter. 0)]

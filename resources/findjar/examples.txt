@@ -215,6 +215,13 @@ Examples:
      /usr/local/share/.../something.tar.gz@README.md
      ...
 
+ 11d. Plain .gz support (-t g). A bare .gz file (rotated log, single-
+      file dump) is treated as a one-entry virtual archive; the inner
+      path is the basename minus '.gz':
+
+     @|bold ~> findjar /var/log -t g -g 'ERROR'|@
+     /var/log/access.log.gz@access.log:42  ERROR 2026-05-12 oom-killed worker
+
  12. Symbolic links are NOT followed by default (a common cause of
      runaway scans). Pass -L to follow:
 
