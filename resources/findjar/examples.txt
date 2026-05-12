@@ -232,6 +232,21 @@ Examples:
      /usr/local/share/.../something.tar.gz@README.md
      ...
 
+ 11ca. --explode <dir> extracts every matched entry to disk under
+       <dir>, preserving the archive layout (@-separators become
+       directory boundaries). Composes with -n / -p / --nested / -g
+       so you can ask "extract every Spring-Core MANIFEST inside this
+       uberjar" with one command:
+
+     @|bold ~> findjar app.jar --nested -n MANIFEST.MF --explode ./out|@
+     # → ./out/app.jar/BOOT-INF/lib/spring-core-6.1.0.jar/META-INF/MANIFEST.MF
+     #   ./out/app.jar/BOOT-INF/lib/jackson-core-2.16.1.jar/META-INF/MANIFEST.MF
+     #   ...
+
+     @|bold ~> findjar ~/.m2 -t j --nested -g 'CVE-' --explode ./vuln-audit|@
+     # → ./vuln-audit/clojure-1.11.1.jar@.../something.txt
+     # only entries whose content matches 'CVE-' are written out.
+
  11d. Plain .gz support (-t g). A bare .gz file (rotated log, single-
       file dump) is treated as a one-entry virtual archive; the inner
       path is the basename minus '.gz':

@@ -356,6 +356,31 @@
     "Class-Path"
     "Automatic-Module-Name"})
 
+(defn- handle-explode
+  "Extract a matched entry to disk under (:explode opts). The output
+  filesystem path mirrors the archive layout: '@' separators in the
+  source path become directory boundaries. Existing files are
+  overwritten silently. A successful extraction emits a :match event
+  for the on-disk file so the user sees the destination path (and
+  the call participates in exit-code semantics)."
+  [output opts ^String file-path stream-factory]
+  (let [^File base (:explode opts)
+        rel        (-> file-path
+                       (str/replace "@" "/")
+                       (str/replace #"^/+" ""))
+        out-file   (jio/file base rel)]
+    (try
+      (jio/make-parents out-file)
+      (with-open [is (stream-factory)
+                  os (jio/output-stream out-file)]
+        (jio/copy is os))
+      (p/match output (.getPath out-file) opts)
+      (catch Exception e
+        (p/warn output
+                (str "exploding " file-path " → " (.getPath out-file)
+                     ": " (.getMessage e))
+                e opts)))))
+
 (defn- handle-manifest-summary
   "Like --manifest --cat but filtered: parses MANIFEST.MF via
   java.util.jar.Manifest and keeps only manifest-summary-keys; passes
@@ -424,11 +449,12 @@
         class-info? (:class-info opts)
         manifest?   (:manifest opts)
         manifest-s? (:manifest-summary opts)
+        explode?    (:explode opts)
         files-only? (:files-only opts)
         hash-types  (:hash opts)
         find-hash   (:find-by-hash opts)
         text?       (:text opts)
-        macro-op    (or cat? hash-types find-hash class-info? manifest? manifest-s?)
+        macro-op    (or cat? hash-types find-hash class-info? manifest? manifest-s? explode?)
         ;; ZIP / JAR directory entries are named with a trailing '/'.
         ;; They have no content — hashing them produces the sha1 of
         ;; the empty stream (da39a3ee... ) for every directory, which
@@ -484,6 +510,7 @@
            (not (stream-line-matches? output opts stream-factory grep-pat))) nil
 
       hash-types (calculate-hashes output file-path stream-factory hash-types opts)
+      explode?   (handle-explode output opts file-path stream-factory)
       cat?       (when-let [s (render-cat output file-path stream-factory opts)]
                    (p/dump-stream output file-path s opts))
       ;; -l / --files-only: collapse grep to a single path emission per

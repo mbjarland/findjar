@@ -155,6 +155,10 @@
      [nil "--manifest-summary"
       "like --manifest but parses MANIFEST.MF via java.util.jar.Manifest and emits only the curated attributes most users care about (Main-Class, Implementation-*, Bundle-*, Class-Path, etc.)"
       :id :manifest-summary]
+     [nil "--explode <dir>"
+      "extract every matched entry to <dir>, preserving archive layout (@ becomes /). Combine with --nested, -g, -n, etc. Existing files are overwritten."
+      :id :explode
+      :parse-fn jio/as-file]
      [nil "--class-info"
       "for each matched .class entry, print class name, super, interfaces, and method signatures (parsed via ASM)"
       :id :class-info]
@@ -275,7 +279,7 @@
 (def option-groups
   [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :ignore-case :types]]
    ["Action"     [:cat :manifest :manifest-summary :class-info :files-only :count :max-count
-                  :hash :find-by-hash :quiet]]
+                  :hash :find-by-hash :explode :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
    ["Scanning"   [:all :follow :max-depth :exclude :include-globs :exclude-globs
                   :no-gitignore :text :no-parallel :parallel-jobs :nested]]

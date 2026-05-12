@@ -622,6 +622,41 @@
       (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
 ;; ----------------------------------------------------------------------------
+;; --explode: extract every matched entry to a target directory.
+
+(deftest explode-extracts-matching-entries-to-target-dir
+  (let [out-dir (.toFile (Files/createTempDirectory "findjar-explode-"
+                           (into-array FileAttribute [])))]
+    (try
+      (let [out (ro/recording-output)
+            opts {:types #{:default "jar"}
+                  :name #"^MANIFEST\.MF$"
+                  :explode out-dir}]
+        (c/perform-scan *root* out raw-cat opts)
+        (testing "extracted file exists on disk at lib.jar/META-INF/MANIFEST.MF"
+          (let [extracted (jio/file out-dir "lib.jar" "META-INF" "MANIFEST.MF")]
+            (is (.isFile extracted))
+            (is (re-find #"Manifest-Version" (slurp extracted))))))
+      (finally (fix/delete-recursively! out-dir)))))
+
+(deftest explode-with-grep-only-extracts-matching-content
+  (let [out-dir (.toFile (Files/createTempDirectory "findjar-explode-g-"
+                           (into-array FileAttribute [])))]
+    (try
+      (let [out (ro/recording-output)
+            opts {:types #{:default "jar"}
+                  :name #"\.clj$"
+                  :grep #"Rich Hickey"
+                  :explode out-dir}]
+        (c/perform-scan *root* out raw-cat opts)
+        ;; beta.clj contains 'Rich Hickey'; alpha.txt doesn't and isn't matched by -n anyway.
+        (testing "matching disk file is extracted"
+          (is (.isFile (jio/file out-dir "beta.clj"))))
+        (testing "matching jar entry is extracted with @ flattened"
+          (is (.isFile (jio/file out-dir "lib.jar" "clojure" "string.clj")))))
+      (finally (fix/delete-recursively! out-dir)))))
+
+;; ----------------------------------------------------------------------------
 ;; --manifest-summary: filtered MANIFEST.MF dump.
 
 (deftest manifest-summary-keeps-allow-listed-keys-only

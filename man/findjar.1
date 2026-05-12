@@ -108,6 +108,18 @@ pom.properties entries are skipped (they are already a 3-line summary).\&
 Useful for auditing what a fat jar bundles without paging through build
 metadata.
 .TP
+.BI \-\-explode " dir"
+Extract every matched entry to
+.IR dir ,
+preserving the archive layout: a path like
+.I app.jar@BOOT-INF/lib/spring.jar@META-INF/MANIFEST.MF
+is written to
+.IR dir/app.jar/BOOT-INF/lib/spring.jar/META-INF/MANIFEST.MF .\&
+Composes with
+.BR \-n " / " \-p " / " \-\-nested " / " \-g
+to narrow what gets extracted.\& Existing files are overwritten without
+prompting; per-file extraction failures surface as warnings on stderr.
+.TP
 .B \-\-class-info
 For each matched .class entry, parse via ASM and print the class
 name, access modifiers, super, implemented interfaces, and method
