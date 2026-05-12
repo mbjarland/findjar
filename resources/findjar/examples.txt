@@ -148,6 +148,18 @@ Examples:
 
      @|bold ~> findjar ~/.m2 --nested --find-by-hash sha1:cf2bcdc...|@
 
+ 10a. Glob-based path filtering with --include-glob / --exclude-glob.
+      Patterns are matched against the path RELATIVE to the search-root
+      with forward-slash separators. ** matches across directory
+      boundaries. Both flags repeatable; include is ANY-match, exclude
+      is NONE-match.
+
+     @|bold ~> findjar . -g TODO --exclude-glob 'test/**' --exclude-glob '**/generated/**'|@
+     @|bold ~> findjar ~/.m2 --include-glob '**/spring-*.jar' -t j -n MANIFEST.MF -c|@
+
+      Filters operate at the filesystem level — they decide whether
+      an archive is opened, not which entries inside it are scanned.
+
  11. By default findjar skips .git, node_modules, target, build,
      .gradle, .cpcache, .idea, .vscode, .svn, .hg, plus anything in
      .gitignore at each search-root (recursively — child .gitignore

@@ -223,6 +223,27 @@ directory levels below each search-root.
 .BI \-\-exclude " name"
 Skip directories with this name.\& Repeatable; adds to the default exclude list.
 .TP
+.BI \-\-include\-glob " pattern"
+Restrict the scan to candidate paths matching
+.IR pattern ,
+compared against the path relative to each search-root.\& Repeatable
+(ANY-match).\& Globstar
+.B **
+matches any number of directory segments;
+.B *
+matches within one segment;
+.B ?
+matches a single character.\& Patterns apply at the filesystem level —
+they decide whether an archive is opened, not which entries inside it
+are scanned.
+.TP
+.BI \-\-exclude\-glob " pattern"
+Skip candidate paths matching
+.IR pattern .\&
+Same matching rules as
+.BR \-\-include\-glob .\&
+Any matching pattern excludes the path.
+.TP
 .B \-\-no\-gitignore
 Do not honor
 .I .gitignore

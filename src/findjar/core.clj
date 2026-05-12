@@ -898,12 +898,66 @@
       (mapcat #(step root-stack % 1) (.listFiles root))
       [root])))
 
+(defn compile-glob ^java.util.regex.Pattern [^String pat]
+  "Shell-style glob → anchored regex matching a forward-slash path.
+    *   matches any chars except '/'
+    **  matches any chars including '/'
+    ?   matches a single char except '/'
+  Everything else is escaped literally. No brace expansion or extglob."
+  (let [sb (StringBuilder. "^")
+        n  (count pat)]
+    (loop [i 0]
+      (cond
+        (>= i n) nil
+        (and (= \* (.charAt pat i))
+             (< (inc i) n)
+             (= \* (.charAt pat (inc i))))
+        (do (.append sb ".*") (recur (+ i 2)))
+        :else
+        (let [c (.charAt pat i)]
+          (case c
+            \*  (.append sb "[^/]*")
+            \?  (.append sb "[^/]")
+            \.  (.append sb "\\.")
+            \\  (.append sb "\\\\")
+            \(  (.append sb "\\(")
+            \)  (.append sb "\\)")
+            \+  (.append sb "\\+")
+            \^  (.append sb "\\^")
+            \$  (.append sb "\\$")
+            \{  (.append sb "\\{")
+            \}  (.append sb "\\}")
+            \|  (.append sb "\\|")
+            (.append sb c))
+          (recur (inc i)))))
+    (.append sb "$")
+    (java.util.regex.Pattern/compile (.toString sb))))
+
+(defn- include-exclude-fn
+  "Predicate over a forward-slash path that honours --include-glob and
+  --exclude-glob. Each accepts multiple patterns; include is ANY-match,
+  exclude is NONE-match; both default to 'pass through' when absent."
+  [opts]
+  (let [includes (->> (:include-globs opts) (mapv compile-glob))
+        excludes (->> (:exclude-globs opts) (mapv compile-glob))]
+    (fn [^String rel-path]
+      (and (or (empty? includes) (some #(re-find % rel-path) includes))
+           (or (empty? excludes) (not-any? #(re-find % rel-path) excludes))))))
+
 (defn candidate-files
   "The lazy seq of files (under search-root) whose extension is permitted by
   the active --types set, after walk-tree applies symlink/depth/exclude/
-  gitignore pruning. Pre-munge opts before calling."
+  gitignore pruning. Pre-munge opts before calling. --include-glob and
+  --exclude-glob (compared against the path relative to search-root) act
+  as an additional filter layer."
   [^File search-root opts]
-  (filter (valid-file-fn opts) (walk-tree search-root opts)))
+  (let [type-ok? (valid-file-fn opts)
+        path-ok? (include-exclude-fn opts)
+        to-rel   (relative-path search-root)]
+    (->> (walk-tree search-root opts)
+         (filter type-ok?)
+         (filter (fn [^File f]
+                   (path-ok? (str/replace (to-rel f) java.io.File/separator "/")))))))
 
 (defn- ancestors-up-to
   "Return f's directory ancestors (excluding f itself), stopping at root

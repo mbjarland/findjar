@@ -223,6 +223,14 @@
       "skip directories with this name (repeatable). Adds to the default exclude list."
       :id :exclude
       :assoc-fn (fn [m k v] (update m k (fnil conj #{}) v))]
+     [nil "--include-glob <pattern>"
+      "only scan paths (relative to search-root) matching this glob. Repeatable; ANY-match. Globstar (**) matches across directories."
+      :id :include-globs
+      :assoc-fn (fn [m k v] (update m k (fnil conj []) v))]
+     [nil "--exclude-glob <pattern>"
+      "skip paths (relative to search-root) matching this glob. Repeatable; any match excludes. Globstar (**) matches across directories."
+      :id :exclude-globs
+      :assoc-fn (fn [m k v] (update m k (fnil conj []) v))]
      [nil "--no-gitignore"
       "do not honor .gitignore files in search-roots"
       :id :no-gitignore]
@@ -266,8 +274,8 @@
    ["Action"     [:cat :manifest :class-info :files-only :count :max-count
                   :hash :find-by-hash :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
-   ["Scanning"   [:all :follow :max-depth :exclude :no-gitignore :text
-                  :no-parallel :parallel-jobs :nested]]
+   ["Scanning"   [:all :follow :max-depth :exclude :include-globs :exclude-globs
+                  :no-gitignore :text :no-parallel :parallel-jobs :nested]]
    ["Misc"       [:stats :why-skipped :examples :completions :profile :version :help]]])
 
 (defn- load-resource
@@ -367,32 +375,7 @@
                                                 (map :desc (vals c/hash-algorithms))))})
     {:error (str "--find-by-hash must be of the form <algo>:<hex>, got '" s "'")}))
 
-(defn- compile-glob ^java.util.regex.Pattern [^String pat]
-  ;; Translate a simple shell-style glob into a regex that matches the whole
-  ;; file name. Supports * (anything-except-/), ? (any single char), and
-  ;; [abc] character classes; everything else is escaped literally. This is
-  ;; intentionally minimal — no extglob, no globstar, no brace expansion.
-  (let [sb (StringBuilder. "^")]
-    (loop [i 0]
-      (when (< i (count pat))
-        (let [c (.charAt pat i)]
-          (case c
-            \* (.append sb "[^/]*")
-            \? (.append sb "[^/]")
-            \. (.append sb "\\.")
-            \\ (.append sb "\\\\")
-            \( (.append sb "\\(")
-            \) (.append sb "\\)")
-            \+ (.append sb "\\+")
-            \^ (.append sb "\\^")
-            \$ (.append sb "\\$")
-            \{ (.append sb "\\{")
-            \} (.append sb "\\}")
-            \| (.append sb "\\|")
-            (.append sb c))
-          (recur (inc i)))))
-    (.append sb "$")
-    (java.util.regex.Pattern/compile (.toString sb))))
+(def ^:private compile-glob c/compile-glob)
 
 (defn validate-args
   "Parse and validate command line arguments."

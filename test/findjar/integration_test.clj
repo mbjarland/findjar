@@ -622,6 +622,55 @@
       (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
 ;; ----------------------------------------------------------------------------
+;; --include-glob / --exclude-glob: path-level glob filtering.
+
+(deftest exclude-glob-prunes-matching-paths
+  (let [paths (set (ro/paths-of
+                     (run {:exclude-globs ["nested/**"]})
+                     :match))]
+    (is (some #(= "alpha.txt" %) paths))
+    (is (not (some #(re-find #"^nested/" %) paths)))))
+
+(deftest include-glob-restricts-to-matching-paths
+  (let [paths (set (ro/paths-of
+                     (run {:include-globs ["nested/**"]})
+                     :match))]
+    (is (every? #(re-find #"^nested/" %) paths))))
+
+(deftest include-and-exclude-glob-compose
+  (let [paths (set (ro/paths-of
+                     (run {:include-globs ["*.txt"]
+                           :exclude-globs ["empty.txt"]})
+                     :match))]
+    (is (contains? paths "alpha.txt"))
+    (is (not (contains? paths "empty.txt")))))
+
+(deftest globstar-matches-across-directories
+  ;; ** matches any number of directory segments. nested/gamma.txt is at
+  ;; depth 1 here, but the same pattern would match deeper layouts too.
+  (let [paths (set (ro/paths-of
+                     (run {:include-globs ["**/gamma.txt"]})
+                     :match))]
+    (is (contains? paths "nested/gamma.txt"))
+    (is (not (contains? paths "alpha.txt")))))
+
+(deftest include-exclude-glob-applies-to-filesystem-paths-not-archive-entries
+  ;; Path filters operate on the candidate files walked from disk, not
+  ;; on entries inside archives. So --exclude-glob 'data.zip' suppresses
+  ;; the archive entirely; --exclude-glob '**/numbers.txt' does NOT (the
+  ;; entry path lives behind the @ separator).
+  (let [silenced  (set (ro/paths-of
+                         (run {:exclude-globs ["data.zip"]
+                               :types         #{:default "jar" "zip"}})
+                         :match))
+        unsilenced (set (ro/paths-of
+                          (run {:exclude-globs ["**/numbers.txt"]
+                                :types         #{:default "jar" "zip"}})
+                          :match))]
+    (is (not (some #(str/includes? % "data.zip") silenced)))
+    (is (some #(str/includes? % "data.zip@") unsilenced))))
+
+;; ----------------------------------------------------------------------------
 ;; --why-skipped diagnostic
 
 (deftest why-skipped-recognizes-default-excluded-dirs
