@@ -622,6 +622,52 @@
       (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
 ;; ----------------------------------------------------------------------------
+;; --duplicate-classes: classpath audit.
+
+(defn- write-jar-with-class! [^java.io.File f, ^String entry-path, ^bytes class-bytes]
+  (jio/make-parents f)
+  (with-open [zos (java.util.zip.ZipOutputStream. (jio/output-stream f))]
+    (.putNextEntry zos (java.util.zip.ZipEntry. entry-path))
+    (.write zos class-bytes 0 (alength class-bytes))
+    (.closeEntry zos)))
+
+(defn- build-class-bytes [^String internal-name field-suffix]
+  (let [cw (org.objectweb.asm.ClassWriter. 0)]
+    (.visit cw 52 0x0001 internal-name nil "java/lang/Object" nil)
+    ;; Vary the bytes between versions by including a different-named field
+    (.visitField cw 0x0001 (str "field" field-suffix) "I" nil nil)
+    (.visitEnd cw)
+    (.toByteArray cw)))
+
+(deftest duplicate-classes-finds-classes-in-two-jars
+  (let [tmp ^java.io.File (.toFile (Files/createTempDirectory "findjar-dup-"
+                                     (into-array FileAttribute [])))]
+    (try
+      (let [class-a (build-class-bytes "com/example/Foo" "A")
+            class-b (build-class-bytes "com/example/Foo" "B")
+            uniq    (build-class-bytes "com/example/Bar" "X")]
+        (write-jar-with-class! (jio/file tmp "v1.jar") "com/example/Foo.class" class-a)
+        (write-jar-with-class! (jio/file tmp "v2.jar") "com/example/Foo.class" class-b)
+        (write-jar-with-class! (jio/file tmp "v1.jar.alt") "com/example/Bar.class" uniq))
+      (let [out  (ro/recording-output)
+            opts {:types #{:default "jar"} :duplicate-classes true}
+            acc  (atom {})
+            opts2 (assoc opts :duplicate-classes-acc acc)]
+        (c/perform-scan tmp out raw-cat opts2)
+        ;; Post-scan: caller (normally main) emits duplicate-class events.
+        (doseq [[fqn occs] @acc :when (>= (count occs) 2)]
+          (p/duplicate-class out fqn occs opts2))
+        (let [dup-rows (filter #(= :duplicate (first %)) (ro/calls-of out))]
+          (testing "exactly one duplicate FQN — com.example.Foo"
+            (is (= 1 (count dup-rows)))
+            (let [[_ fqn occs _] (first dup-rows)]
+              (is (= "com.example.Foo" fqn))
+              (testing "two occurrences with distinct sha1s"
+                (is (= 2 (count occs)))
+                (is (= 2 (count (distinct (map :hash occs))))))))))
+      (finally (fix/delete-recursively! tmp)))))
+
+;; ----------------------------------------------------------------------------
 ;; --explode: extract every matched entry to a target directory.
 
 (deftest explode-extracts-matching-entries-to-target-dir

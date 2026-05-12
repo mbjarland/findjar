@@ -159,6 +159,9 @@
       "extract every matched entry to <dir>, preserving archive layout (@ becomes /). Combine with --nested, -g, -n, etc. Existing files are overwritten."
       :id :explode
       :parse-fn jio/as-file]
+     [nil "--duplicate-classes"
+      "after scanning, list every fully-qualified class name found in two or more jars (with the sha1 of each copy so you can see which is which). Combine with --nested for uberjars."
+      :id :duplicate-classes]
      [nil "--class-info"
       "for each matched .class entry, print class name, super, interfaces, and method signatures (parsed via ASM)"
       :id :class-info]
@@ -279,7 +282,7 @@
 (def option-groups
   [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :ignore-case :types]]
    ["Action"     [:cat :manifest :manifest-summary :class-info :files-only :count :max-count
-                  :hash :find-by-hash :explode :quiet]]
+                  :hash :find-by-hash :explode :duplicate-classes :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
    ["Scanning"   [:all :follow :max-depth :exclude :include-globs :exclude-globs
                   :no-gitignore :text :no-parallel :parallel-jobs :nested]]

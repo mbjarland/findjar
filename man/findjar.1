@@ -108,6 +108,23 @@ pom.properties entries are skipped (they are already a 3-line summary).\&
 Useful for auditing what a fat jar bundles without paging through build
 metadata.
 .TP
+.B \-\-duplicate\-classes
+JVM-classpath audit mode.\& Walks every
+.B .class
+entry in the search-roots (combine with
+.B \-\-nested
+for uberjars), extracts the fully-qualified class name via ASM and
+sha1s the bytes.\& At the end of the scan, emits one record per FQN
+that appeared in two or more jars, with each occurrence's path and
+sha1 — so you can tell at a glance which copy is which.\& Likely cause
+of mysterious
+.B NoSuchMethodError
+/
+.B IncompatibleClassChangeError
+in production.\& Combines with
+.B \-\-output json
+for pipelines.
+.TP
 .BI \-\-explode " dir"
 Extract every matched entry to
 .IR dir ,

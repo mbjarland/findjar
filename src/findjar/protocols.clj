@@ -34,4 +34,9 @@
      stream is read once at call time so implementations can buffer freely.")
   (print-hash [this path hash-type hash-value opts]
     "Called for -s. hash-type is the algorithm keyword (:md5 :sha1 ...);
-     hash-value is the hex/CRC string."))
+     hash-value is the hex/CRC string.")
+  (duplicate-class [this fqn occurrences opts]
+    "Called once per duplicated FQN at the end of a --duplicate-classes scan.
+     fqn is a Java-style class name ('com.example.Foo'); occurrences is a
+     non-empty seq of {:path entry-path :hash sha1-hex} maps, one per source
+     archive that contains the class. Only called when count >= 2."))

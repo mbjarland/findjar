@@ -63,7 +63,13 @@
       (binding [r/*use-colors* (r/use-colors? opts)]
         (println (r/style white hash-value)
                  (name hash-type)
-                 path)))))
+                 path)))
+
+    (duplicate-class [_ fqn occurrences opts]
+      (binding [r/*use-colors* (r/use-colors? opts)]
+        (println (r/style red fqn))
+        (doseq [{:keys [path hash]} occurrences]
+          (println " " (r/style white hash) path))))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Silent output (-q): suppresses every call. Match-tracking is the
@@ -71,13 +77,14 @@
 
 (defn- silent-output []
   (reify p/FindJarOutput
-    (warn        [_ _ _ _]   nil)
-    (match       [_ _ _]     nil)
-    (grep-match  [_ _ _ _]   nil)
-    (grep-count  [_ _ _ _]   nil)
-    (class-info  [_ _ _ _]   nil)
-    (dump-stream [_ _ _ _]   nil)
-    (print-hash  [_ _ _ _ _] nil)))
+    (warn            [_ _ _ _]   nil)
+    (match           [_ _ _]     nil)
+    (grep-match      [_ _ _ _]   nil)
+    (grep-count      [_ _ _ _]   nil)
+    (class-info      [_ _ _ _]   nil)
+    (dump-stream     [_ _ _ _]   nil)
+    (print-hash      [_ _ _ _ _] nil)
+    (duplicate-class [_ _ _ _]   nil)))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Match-tracking wrapper: counts how many match-producing calls fired
@@ -101,7 +108,10 @@
         (dump-stream [_ path s opts]   (swap! hits inc)
                                        (p/dump-stream delegate path s opts))
         (print-hash  [_ p t v opts]    (swap! hits inc)
-                                       (p/print-hash  delegate p t v opts)))
+                                       (p/print-hash  delegate p t v opts))
+        (duplicate-class [_ fqn occs opts]
+                                       (swap! hits inc)
+                                       (p/duplicate-class delegate fqn occs opts)))
       {::hits hits})))
 
 (defn- match-count [out]
@@ -126,6 +136,7 @@
         json-array?  (= :json-array (:output opts))
         stats?       (:stats opts)
         examined     (atom 0)
+        dup-acc      (when (:duplicate-classes opts) (atom {}))
         start-ms     (System/currentTimeMillis)
         scan         (if (false? (:parallel opts))
                        c/perform-scan
@@ -138,13 +149,22 @@
                             (not (:apath opts)))
                        (assoc :include-root? true)
                        stats?
-                       (assoc :examined-counter examined))]
+                       (assoc :examined-counter examined)
+                       dup-acc
+                       (assoc :duplicate-classes-acc dup-acc))]
     ;; json-array prologue: open bracket BEFORE the scan so the output is
     ;; valid JSON even when nothing matches. The output sink emits commas
     ;; between records; we close the bracket after the scan.
     (when json-array? (print "["))
     (doseq [root search-roots]
       (scan root output r/render-cat opts))
+    ;; --duplicate-classes post-scan emission: walk the accumulator,
+    ;; emit one duplicate-class event per FQN with 2+ occurrences. The
+    ;; output sink handles formatting (text / json / json-array).
+    (when dup-acc
+      (doseq [[fqn occs] (sort-by key @dup-acc)
+              :when (>= (count occs) 2)]
+        (p/duplicate-class output fqn occs opts)))
     (when json-array? (println "]"))
     (when stats?
       (let [elapsed-s (/ (- (System/currentTimeMillis) start-ms) 1000.0)]

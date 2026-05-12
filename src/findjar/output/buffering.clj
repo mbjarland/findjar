@@ -35,7 +35,9 @@
   (dump-stream [_ path materialized opts]
     (.add calls [:dump-stream path materialized opts]))
   (print-hash [_ path hash-type hash-value opts]
-    (.add calls [:print-hash path hash-type hash-value opts])))
+    (.add calls [:print-hash path hash-type hash-value opts]))
+  (duplicate-class [_ fqn occurrences opts]
+    (.add calls [:duplicate-class fqn occurrences opts])))
 
 (defn buffer
   "A fresh Buffer. Single-threaded: one worker writes, one consumer reads
@@ -60,7 +62,8 @@
       :grep-count  (apply p/grep-count  output args)
       :class-info  (apply p/class-info  output args)
       :dump-stream (apply p/dump-stream output args)
-      :print-hash  (apply p/print-hash  output args))))
+      :print-hash       (apply p/print-hash       output args)
+      :duplicate-class  (apply p/duplicate-class  output args))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Bounded pmap — same shape as clojure.core/pmap but lets the caller pick

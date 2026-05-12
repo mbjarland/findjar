@@ -60,7 +60,9 @@
     :class-info (assoc (second args) :kind "class-info" :path (first args))
     :cat        {:kind "cat"  :path (first args) :content (second args)}
     :hash       (let [[path htype hval] args]
-                  {:kind "hash" :path path :algo (name htype) :hex hval})))
+                  {:kind "hash" :path path :algo (name htype) :hex hval})
+    :duplicate  (let [[fqn occs] args]
+                  {:kind "duplicate-class" :fqn fqn :occurrences (vec occs)})))
 
 ;; ----------------------------------------------------------------------------
 ;; jsonl ("json lines") emitter — one JSON object per line. Default --output
@@ -83,7 +85,8 @@
     (grep-count  [_ path n _opts]                         (emit-line! (record-of :count      [path n])))
     (class-info  [_ path info _opts]                      (emit-line! (record-of :class-info [path info])))
     (dump-stream [_ path materialized _opts]              (emit-line! (record-of :cat        [path materialized])))
-    (print-hash  [_ path hash-type hash-value _opts]      (emit-line! (record-of :hash       [path hash-type hash-value])))))
+    (print-hash  [_ path hash-type hash-value _opts]      (emit-line! (record-of :hash       [path hash-type hash-value])))
+    (duplicate-class [_ fqn occurrences _opts]            (emit-line! (record-of :duplicate  [fqn occurrences])))))
 
 ;; ----------------------------------------------------------------------------
 ;; json-array emitter — same records, wrapped in a single top-level JSON
@@ -108,4 +111,5 @@
       (grep-count  [_ path n _opts]                        (emit! (record-of :count      [path n])))
       (class-info  [_ path info _opts]                     (emit! (record-of :class-info [path info])))
       (dump-stream [_ path materialized _opts]             (emit! (record-of :cat        [path materialized])))
-      (print-hash  [_ path hash-type hash-value _opts]     (emit! (record-of :hash       [path hash-type hash-value]))))))
+      (print-hash  [_ path hash-type hash-value _opts]     (emit! (record-of :hash       [path hash-type hash-value])))
+      (duplicate-class [_ fqn occurrences _opts]           (emit! (record-of :duplicate  [fqn occurrences]))))))

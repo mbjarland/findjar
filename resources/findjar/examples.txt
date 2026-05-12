@@ -232,6 +232,23 @@ Examples:
      /usr/local/share/.../something.tar.gz@README.md
      ...
 
+ 11bb. --duplicate-classes — classpath audit. Walks every .class in
+       the search-roots (use --nested for uberjars), groups by FQN,
+       reports any class that lives in 2+ jars with sha1s so you can
+       tell which copy is which. Common cause of mysterious
+       NoSuchMethodError / IncompatibleClassChangeError in
+       production:
+
+     @|bold ~> findjar ~/.m2 -t j --nested --duplicate-classes|@
+
+     com.google.common.collect.ImmutableList
+       abc123...  ~/.m2/.../guava-31.0.1-jre.jar@com/google/common/collect/ImmutableList.class
+       def456...  ~/.m2/.../shaded-app.jar@BOOT-INF/lib/old-guava-19.0.jar@com/google/common/collect/ImmutableList.class
+
+     Add --output json to pipe into jq for filtering:
+
+     @|bold ~> findjar ~/.m2 -t j --nested --duplicate-classes --output json | jq 'select(.fqn|startswith("com.google."))'|@
+
  11ca. --explode <dir> extracts every matched entry to disk under
        <dir>, preserving the archive layout (@-separators become
        directory boundaries). Composes with -n / -p / --nested / -g

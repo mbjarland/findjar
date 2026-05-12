@@ -13,7 +13,8 @@
         (grep-count  [_ path n opts]            (swap! calls conj [:count path n opts]))
         (class-info  [_ path info opts]         (swap! calls conj [:class-info path info opts]))
         (dump-stream [_ path materialized opts] (swap! calls conj [:dump path materialized opts]))
-        (print-hash  [_ path htype hval opts]   (swap! calls conj [:hash path htype hval opts])))
+        (print-hash  [_ path htype hval opts]   (swap! calls conj [:hash path htype hval opts]))
+        (duplicate-class [_ fqn occs opts]      (swap! calls conj [:duplicate fqn occs opts])))
       {::calls calls})))
 
 (defn calls-of [out]

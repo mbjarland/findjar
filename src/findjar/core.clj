@@ -356,6 +356,31 @@
     "Class-Path"
     "Automatic-Module-Name"})
 
+(defn- jvm-name->dots [^String n] (when n (str/replace n "/" ".")))
+
+(defn- sha1-of ^String [^bytes bs]
+  (let [md (java.security.MessageDigest/getInstance "SHA-1")
+        h  (.digest md bs)
+        sb (StringBuilder. (* 2 (alength h)))]
+    (dotimes [i (alength h)]
+      (.append sb (format "%02x" (aget h i))))
+    (str sb)))
+
+(defn- handle-duplicate-classes
+  "Accumulator for --duplicate-classes. For each .class entry, read the
+  bytes, extract the FQN via ASM, sha1 the bytes, and append
+  {:path :hash} to the per-FQN list in the shared atom map at
+  (:duplicate-classes-acc opts). The post-scan emitter in main reads
+  the atom and emits one duplicate-class event per FQN with count >= 2."
+  [opts ^String file-path stream-factory]
+  (when (.endsWith file-path ".class")
+    (let [acc (:duplicate-classes-acc opts)
+          bs  (with-open [is (stream-factory)] (.readAllBytes is))
+          info (class-info-from-bytes bs)]
+      (when-let [fqn (jvm-name->dots (:name info))]
+        (swap! acc update fqn (fnil conj [])
+               {:path file-path :hash (sha1-of bs)})))))
+
 (defn- handle-explode
   "Extract a matched entry to disk under (:explode opts). The output
   filesystem path mirrors the archive layout: '@' separators in the
@@ -450,11 +475,13 @@
         manifest?   (:manifest opts)
         manifest-s? (:manifest-summary opts)
         explode?    (:explode opts)
+        dup-classes? (:duplicate-classes opts)
         files-only? (:files-only opts)
         hash-types  (:hash opts)
         find-hash   (:find-by-hash opts)
         text?       (:text opts)
-        macro-op    (or cat? hash-types find-hash class-info? manifest? manifest-s? explode?)
+        macro-op    (or cat? hash-types find-hash class-info? manifest?
+                        manifest-s? explode? dup-classes?)
         ;; ZIP / JAR directory entries are named with a trailing '/'.
         ;; They have no content — hashing them produces the sha1 of
         ;; the empty stream (da39a3ee... ) for every directory, which
@@ -494,6 +521,12 @@
       manifest-s?
       (when (manifest-entry? file-path)
         (handle-manifest-summary output opts file-path stream-factory))
+
+      ;; --duplicate-classes accumulates: each .class entry's FQN +
+      ;; sha1 lands in a shared atom; main emits the summary after
+      ;; the scan finishes. Non-class entries are silently ignored.
+      dup-classes?
+      (handle-duplicate-classes opts file-path stream-factory)
 
       ;; --find-by-hash short-circuits everything else: hash and emit on match.
       find-hash (handle-find-by-hash output opts file-path stream-factory find-hash)
