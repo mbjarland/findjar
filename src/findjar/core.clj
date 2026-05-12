@@ -371,11 +371,17 @@
   bytes, extract the FQN via ASM, sha1 the bytes, and append
   {:path :hash} to the per-FQN list in the shared atom map at
   (:duplicate-classes-acc opts). The post-scan emitter in main reads
-  the atom and emits one duplicate-class event per FQN with count >= 2."
+  the atom and emits one duplicate-class event per FQN with count >= 2.
+
+  The ^InputStream type hint is required: stream-factory often returns
+  a package-private subclass like ZipFile$ZipFileInflaterInputStream
+  that Clojure reflection can't resolve .close on directly. The hint
+  routes the .close call through the public AutoCloseable interface."
   [opts ^String file-path stream-factory]
   (when (.endsWith file-path ".class")
-    (let [acc (:duplicate-classes-acc opts)
-          bs  (with-open [is (stream-factory)] (.readAllBytes is))
+    (let [acc  (:duplicate-classes-acc opts)
+          bs   (with-open [^java.io.InputStream is (stream-factory)]
+                 (.readAllBytes is))
           info (class-info-from-bytes bs)]
       (when-let [fqn (jvm-name->dots (:name info))]
         (swap! acc update fqn (fnil conj [])
@@ -396,8 +402,8 @@
         out-file   (jio/file base rel)]
     (try
       (jio/make-parents out-file)
-      (with-open [is (stream-factory)
-                  os (jio/output-stream out-file)]
+      (with-open [^java.io.InputStream  is (stream-factory)
+                  ^java.io.OutputStream os (jio/output-stream out-file)]
         (jio/copy is os))
       (p/match output (.getPath out-file) opts)
       (catch Exception e
@@ -416,7 +422,7 @@
         (.endsWith ^String file-path "@MANIFEST.MF")
         (= ^String file-path "MANIFEST.MF"))
     (try
-      (with-open [is (stream-factory)]
+      (with-open [^java.io.InputStream is (stream-factory)]
         (let [mf    (java.util.jar.Manifest. is)
               attrs (.getMainAttributes mf)
               rows  (->> attrs
