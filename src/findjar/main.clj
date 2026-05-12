@@ -110,26 +110,34 @@
 ;;;; Entry point
 
 (defn- pick-output [opts]
-  (match-tracking-output
-    (cond
-      (:quiet opts)             (silent-output)
-      (= :json (:output opts))  (json-out/json-output)
-      :else                     (default-output))))
+  (let [fmt (:output opts)]
+    (match-tracking-output
+      (cond
+        (:quiet opts)              (silent-output)
+        (= :json-array fmt)        (json-out/json-array-output)
+        (#{:json :ndjson} fmt)     (json-out/json-output)
+        :else                      (default-output)))))
 
 (defn- run-scan [search-roots opts]
-  (let [output  (pick-output opts)
-        scan    (if (false? (:parallel opts))
-                  c/perform-scan
-                  buf/parallel-scan)
+  (let [output       (pick-output opts)
+        json-array?  (= :json-array (:output opts))
+        scan         (if (false? (:parallel opts))
+                       c/perform-scan
+                       buf/parallel-scan)
         ;; With multiple roots, include the root prefix in path output so
         ;; results are unambiguous between roots. Single root keeps the
         ;; existing relative-from-root behaviour. --apath always wins.
-        opts    (cond-> opts
-                  (and (< 1 (count search-roots))
-                       (not (:apath opts)))
-                  (assoc :include-root? true))]
+        opts         (cond-> opts
+                       (and (< 1 (count search-roots))
+                            (not (:apath opts)))
+                       (assoc :include-root? true))]
+    ;; json-array prologue: open bracket BEFORE the scan so the output is
+    ;; valid JSON even when nothing matches. The output sink emits commas
+    ;; between records; we close the bracket after the scan.
+    (when json-array? (print "["))
     (doseq [root search-roots]
       (scan root output r/render-cat opts))
+    (when json-array? (println "]"))
     (saw-match? output)))
 
 (defn main-entrypoint

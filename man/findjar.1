@@ -163,9 +163,15 @@ lines before each match.
 .BI \-\-output " fmt"
 Output format:
 .B text
-(default) or
-.BR json .\&
-JSON output emits one object per line.
+(default),
+.B json
+(or its alias
+.BR ndjson )
+emitting one JSON object per line (JSON Lines / jsonl), or
+.B json-array
+emitting a single top-level JSON array (jq-friendly without
+.BR "-s" ;
+the array is empty when nothing matched).
 .TP
 .BI \-o " path" ", " \-\-out\-file " path"
 With

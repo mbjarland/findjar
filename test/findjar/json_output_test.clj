@@ -56,3 +56,38 @@
                  (fn [out]
                    (p/match out "weird\"\\path\nfoo" {})))]
     (is (str/includes? line "\"path\":\"weird\\\"\\\\path\\nfoo\""))))
+
+;; ----------------------------------------------------------------------------
+;; --output json-array: records joined by commas, no surrounding brackets
+;; (main.clj prints those before/after the scan).
+
+(defn- capture-raw
+  "Run f against a json-array-output, returning the raw stdout string."
+  [f]
+  (let [sw (java.io.StringWriter.)]
+    (binding [*out* sw]
+      (f (json-out/json-array-output)))
+    (.toString sw)))
+
+(deftest json-array-output-no-records-emits-nothing
+  (is (= "" (capture-raw (fn [_])))))
+
+(deftest json-array-output-single-record-no-comma
+  (let [s (capture-raw (fn [out] (p/match out "foo.clj" {})))]
+    (is (str/starts-with? s "{\"kind\":\"match\""))
+    (is (not (str/includes? s ",{")))
+    (is (not (str/ends-with? s "\n")))))
+
+(deftest json-array-output-multiple-records-comma-separated
+  (let [s (capture-raw (fn [out]
+                         (p/match out "a.clj" {})
+                         (p/match out "b.clj" {})
+                         (p/match out "c.clj" {})))]
+    ;; Records are joined by commas between adjacent records — three
+    ;; records means exactly two inter-record separators. Each record
+    ;; itself also contains a comma between its kind and path fields,
+    ;; so the exact total isn't the cleanest assertion. Pattern-match
+    ;; the shape instead:
+    (is (re-find #"^\{[^{}]+\},\{[^{}]+\},\{[^{}]+\}$" s))
+    ;; And confirm the prefix wraps as a valid JSON array.
+    (is (re-find #"^\[\{.*\},\{.*\},\{.*\}\]\s*$" (str "[" s "]")))))

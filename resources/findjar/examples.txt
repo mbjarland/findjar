@@ -220,13 +220,17 @@ Examples:
      @|bold ~> findjar ~/.m2 -g "rich hickey" -fi -t j|@
      @|bold ~> findjar . -g "(?m)^class" -fm|@        # multiline mode
 
- 15. JSON output — one object per line (jsonl), suitable for piping
-     into jq, grep, or for editor / LLM integrations:
+ 15. JSON output — one object per line (jsonl, also surfaced as
+     --output ndjson). Suitable for piping into jq, grep, editor /
+     LLM integrations. Use --output json-array if your jq pipeline
+     would rather consume a single top-level array:
 
      @|bold ~> findjar . -g "TODO" --output json|@
 
      {"kind":"grep","path":"src/foo.clj","line":42,"hit?":true,"text":"  ;; TODO ..."}
      {"kind":"grep","path":"src/bar.clj","line":17,"hit?":true,"text":"  ;; TODO ..."}
+
+     @|bold ~> findjar . -g "TODO" --output json-array | jq 'group_by(.path)'|@
 
      a) Count TODOs per file:
 
