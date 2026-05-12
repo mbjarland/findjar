@@ -908,8 +908,11 @@
 (defn scan-file
   "Scan a single File against output/render-cat with already-munged opts.
   display-path is the path string (relative or absolute) to surface to the
-  user."
+  user. Bumps the :examined-counter atom in opts if present (used by
+  --stats)."
   [output render-cat opts ^File f display-path]
+  (when-let [c (:examined-counter opts)]
+    (swap! c inc))
   (let [{:keys [scan]} (finder-for f (:types opts))]
     (scan f display-path opts output render-cat)))
 

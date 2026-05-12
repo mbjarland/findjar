@@ -241,6 +241,9 @@
       "recurse into jars/zips that appear as entries inside other jars/zips. Path takes the form outer.jar@inner.jar@entry."
       :id :nested]
 
+     [nil "--stats"
+      "after the scan, print a one-line summary (archives + entries + hits + elapsed) to stderr"
+      :id :stats]
      [nil "--examples"  "print usage examples and exit"]
      [nil "--completions <shell>"
       "print shell completion script (zsh|bash|fish) and exit"
@@ -261,7 +264,7 @@
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
    ["Scanning"   [:all :follow :max-depth :exclude :no-gitignore :text
                   :no-parallel :parallel-jobs :nested]]
-   ["Misc"       [:examples :completions :profile :version :help]]])
+   ["Misc"       [:stats :examples :completions :profile :version :help]]])
 
 (defn- load-resource
   "Slurp a packaged text resource. Used for help / examples text so cli.clj

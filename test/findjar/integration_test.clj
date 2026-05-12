@@ -621,6 +621,11 @@
     (testing "without :null, output uses newlines"
       (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
+(deftest stats-flag-does-not-break-exit-code
+  ;; --stats prints to stderr at end of scan; just smoke-test the path.
+  (is (= 0 (run-main (.getPath *root*) "-n" "alpha.txt" "--stats")))
+  (is (= 1 (run-main (.getPath *root*) "-n" "nope-not-here" "--stats"))))
+
 (deftest exit-code-quiet-mode-is-grep-compatible
   ;; -q just suppresses output; exit code is the same as without -q.
   (is (= 0 (run-main (.getPath *root*) "-n" "alpha.txt" "-q")))

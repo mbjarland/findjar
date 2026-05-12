@@ -245,6 +245,13 @@ Recurse into jars/zips that appear as entries inside other jars/zips.\& Path tak
 
 .SS Misc
 .TP
+.B \-\-stats
+After the scan, print a single summary line to stderr — number of
+candidate paths examined, hits emitted, and wall-clock elapsed.\&
+Useful when tuning
+.B \-\-parallel\-jobs
+or when a slow scan needs reassurance that work is happening.
+.TP
 .B \-\-examples
 Print usage examples and exit.
 .TP

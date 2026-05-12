@@ -80,31 +80,34 @@
     (print-hash  [_ _ _ _ _] nil)))
 
 ;;;; ---------------------------------------------------------------------------
-;;;; Match-tracking wrapper: records whether any match-producing call ever
-;;;; fired against the wrapped sink. -main reads the flag via saw-match? to
-;;;; pick a grep-compatible exit code (0 if matched, 1 if not).
+;;;; Match-tracking wrapper: counts how many match-producing calls fired
+;;;; against the wrapped sink. -main reads the count via match-count to pick
+;;;; the grep-compatible exit code (0 if any matched, 1 if not) and to feed
+;;;; the --stats summary.
 
 (defn- match-tracking-output [delegate]
-  (let [matched? (atom false)]
+  (let [hits (atom 0)]
     (with-meta
       (reify p/FindJarOutput
         (warn        [_ msg ex opts]   (p/warn        delegate msg ex opts))
-        (match       [_ path opts]     (reset! matched? true)
+        (match       [_ path opts]     (swap! hits inc)
                                        (p/match       delegate path opts))
-        (grep-match  [_ max-# m opts]  (reset! matched? true)
+        (grep-match  [_ max-# m opts]  (swap! hits inc)
                                        (p/grep-match  delegate max-# m opts))
-        (grep-count  [_ path n opts]   (reset! matched? true)
+        (grep-count  [_ path n opts]   (swap! hits inc)
                                        (p/grep-count  delegate path n opts))
-        (class-info  [_ path i opts]   (reset! matched? true)
+        (class-info  [_ path i opts]   (swap! hits inc)
                                        (p/class-info  delegate path i opts))
-        (dump-stream [_ path s opts]   (reset! matched? true)
+        (dump-stream [_ path s opts]   (swap! hits inc)
                                        (p/dump-stream delegate path s opts))
-        (print-hash  [_ p t v opts]    (reset! matched? true)
+        (print-hash  [_ p t v opts]    (swap! hits inc)
                                        (p/print-hash  delegate p t v opts)))
-      {::matched? matched?})))
+      {::hits hits})))
 
-(defn- saw-match? [out]
-  (-> out meta ::matched? deref))
+(defn- match-count [out]
+  (-> out meta ::hits deref))
+
+(defn- saw-match? [out] (pos? (match-count out)))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Entry point
@@ -121,6 +124,9 @@
 (defn- run-scan [search-roots opts]
   (let [output       (pick-output opts)
         json-array?  (= :json-array (:output opts))
+        stats?       (:stats opts)
+        examined     (atom 0)
+        start-ms     (System/currentTimeMillis)
         scan         (if (false? (:parallel opts))
                        c/perform-scan
                        buf/parallel-scan)
@@ -130,7 +136,9 @@
         opts         (cond-> opts
                        (and (< 1 (count search-roots))
                             (not (:apath opts)))
-                       (assoc :include-root? true))]
+                       (assoc :include-root? true)
+                       stats?
+                       (assoc :examined-counter examined))]
     ;; json-array prologue: open bracket BEFORE the scan so the output is
     ;; valid JSON even when nothing matches. The output sink emits commas
     ;; between records; we close the bracket after the scan.
@@ -138,6 +146,12 @@
     (doseq [root search-roots]
       (scan root output r/render-cat opts))
     (when json-array? (println "]"))
+    (when stats?
+      (let [elapsed-s (/ (- (System/currentTimeMillis) start-ms) 1000.0)]
+        (binding [*out* *err*]
+          (println
+            (format "findjar: examined %d path(s), emitted %d hit(s) in %.2fs"
+                    @examined (match-count output) elapsed-s)))))
     (saw-match? output)))
 
 (defn main-entrypoint
