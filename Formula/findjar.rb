@@ -15,20 +15,20 @@
 class Findjar < Formula
   desc     "Search files and the contents of jar/zip archives"
   homepage "https://github.com/mbjarland/findjar"
-  version  "1.0.174"   # bump per release
+  version  "1.0.176"   # bump per release
   license  "EPL-2.0"
 
   # We ship one macOS asset (arm64). Intel macs run the arm64 binary
   # via Rosetta 2 — Homebrew handles this transparently for the user.
   on_macos do
-    url    "https://github.com/mbjarland/findjar/releases/download/v1.0.174/findjar-1.0.174-macos-arm64.tar.gz"
-    sha256 "929ad45c7398467b5e40cb4e6574f8bcd36acec4a54f683348ac406db89ad968"
+    url    "https://github.com/mbjarland/findjar/releases/download/v1.0.176/findjar-1.0.176-macos-arm64.tar.gz"
+    sha256 "515c2335d948d398467a8d635adbfc56804b404460c428cc94b718c3ab89ccce"
   end
 
   on_linux do
     on_intel do
-      url    "https://github.com/mbjarland/findjar/releases/download/v1.0.174/findjar-1.0.174-linux-x64.tar.gz"
-      sha256 "9eaad9f49849f374df5078ec164fd8d82317bc3595e12c1df502d84bc0e600d6"
+      url    "https://github.com/mbjarland/findjar/releases/download/v1.0.176/findjar-1.0.176-linux-x64.tar.gz"
+      sha256 "50cb6271ccf768da67a83fb5e7f4dd41334fc95c213d89fa71be8363fbb151e0"
     end
   end
 
