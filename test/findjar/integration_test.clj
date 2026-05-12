@@ -827,6 +827,52 @@
   (is (= 1 (run-main (.getPath *root*) "-n" "nope-not-here" "-q"))))
 
 ;; ----------------------------------------------------------------------------
+;; Defensive tests for unusual archive entry names. ZIP allows '@' inside
+;; entry names; findjar's archive@entry path scheme uses '@' as a
+;; separator so multiple @'s are possible. Leading-slash entries are also
+;; allowed by the ZIP format but rare.
+
+(defn- write-jar-with-entries! [^java.io.File f entries]
+  (jio/make-parents f)
+  (with-open [zos (java.util.zip.ZipOutputStream. (jio/output-stream f))]
+    (doseq [[name content] entries]
+      (.putNextEntry zos (java.util.zip.ZipEntry. ^String name))
+      (let [b (.getBytes ^String content "UTF-8")]
+        (.write zos b 0 (alength b)))
+      (.closeEntry zos))))
+
+(deftest archive-entries-with-at-sign-in-name
+  (let [tmp (.toFile (Files/createTempDirectory "findjar-atname-"
+                       (into-array FileAttribute [])))]
+    (try
+      (write-jar-with-entries! (jio/file tmp "weird.jar")
+                               [["weird@name.txt" "content"]
+                                ["normal.txt"     "ok"]])
+      (let [out  (ro/recording-output)
+            opts {:types #{:default "jar"}}]
+        (c/perform-scan tmp out raw-cat opts)
+        (let [paths (set (ro/paths-of out :match))]
+          (testing "the @ inside an entry name doesn't crash the scanner"
+            (is (contains? paths "weird.jar@weird@name.txt")))
+          (testing "other entries still scanned normally"
+            (is (contains? paths "weird.jar@normal.txt")))))
+      (finally (fix/delete-recursively! tmp)))))
+
+(deftest archive-entries-with-leading-slash
+  (let [tmp (.toFile (Files/createTempDirectory "findjar-slash-"
+                       (into-array FileAttribute [])))]
+    (try
+      (write-jar-with-entries! (jio/file tmp "slashy.jar")
+                               [["/leading-slash.txt" "content"]])
+      (let [out  (ro/recording-output)
+            opts {:types #{:default "jar"}}]
+        (c/perform-scan tmp out raw-cat opts)
+        (testing "leading-slash entry name surfaces without crash"
+          (is (some #(.endsWith ^String % "leading-slash.txt")
+                    (ro/paths-of out :match)))))
+      (finally (fix/delete-recursively! tmp)))))
+
+;; ----------------------------------------------------------------------------
 ;; Directory entries inside an archive must NOT contribute to action output
 ;; (hashing, cat, grep, find-by-hash, class-info, manifest). They were
 ;; previously hashed, producing da39a3ee... (sha1 of empty) for every
