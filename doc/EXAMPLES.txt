@@ -148,6 +148,18 @@ Examples:
 
      ~> findjar ~/.m2 --nested --find-by-hash sha1:cf2bcdc...
 
+ 10a. Glob-based path filtering with --include-glob / --exclude-glob.
+      Patterns are matched against the path RELATIVE to the search-root
+      with forward-slash separators. ** matches across directory
+      boundaries. Both flags repeatable; include is ANY-match, exclude
+      is NONE-match.
+
+     ~> findjar . -g TODO --exclude-glob 'test/**' --exclude-glob '**/generated/**'
+     ~> findjar ~/.m2 --include-glob '**/spring-*.jar' -t j -n MANIFEST.MF -c
+
+      Filters operate at the filesystem level — they decide whether
+      an archive is opened, not which entries inside it are scanned.
+
  11. By default findjar skips .git, node_modules, target, build,
      .gradle, .cpcache, .idea, .vscode, .svn, .hg, plus anything in
      .gitignore at each search-root (recursively — child .gitignore
@@ -171,6 +183,23 @@ Examples:
 
      ~> findjar ~/.m2 --nested --manifest -g log4j -l
      # → list every fat jar that bundles a log4j-derived dependency
+
+     For uberjars where each bundled MANIFEST.MF is 40 lines of build
+     metadata, --manifest-summary filters down to a curated set of
+     attributes (Main-Class, Implementation-*, Bundle-*, Class-Path,
+     Created-By, ...):
+
+     ~> findjar app.jar --nested --manifest-summary
+
+     <<<<<<< app.jar@META-INF/MANIFEST.MF
+       Main-Class: com.example.Main
+       Implementation-Version: 4.2.1
+     >>>>>>>
+     <<<<<<< app.jar@BOOT-INF/lib/spring-core-6.1.0.jar@META-INF/MANIFEST.MF
+       Bundle-Name: Spring Core
+       Bundle-SymbolicName: org.springframework.core
+       Bundle-Version: 6.1.0
+     >>>>>>>
 
  11b. --class-info parses .class entries via ASM and prints their
       structure. Combine with -t j --nested to crawl uberjars and
@@ -203,6 +232,45 @@ Examples:
      /usr/local/share/.../something.tar.gz@README.md
      ...
 
+ 11bb. --duplicate-classes — classpath audit. Walks every .class in
+       the search-roots (use --nested for uberjars), groups by FQN,
+       reports any class that lives in 2+ jars with sha1s so you can
+       tell which copy is which. Common cause of mysterious
+       NoSuchMethodError / IncompatibleClassChangeError in
+       production:
+
+     ~> findjar ~/.m2 -t j --nested --duplicate-classes
+
+     com.google.common.collect.ImmutableList
+       abc123...  ~/.m2/.../guava-31.0.1-jre.jar@com/google/common/collect/ImmutableList.class
+       def456...  ~/.m2/.../shaded-app.jar@BOOT-INF/lib/old-guava-19.0.jar@com/google/common/collect/ImmutableList.class
+
+     Add --output json to pipe into jq for filtering:
+
+     ~> findjar ~/.m2 -t j --nested --duplicate-classes --output json | jq 'select(.fqn|startswith("com.google."))'
+
+ 11ca. --explode <dir> extracts every matched entry to disk under
+       <dir>, preserving the archive layout (@-separators become
+       directory boundaries). Composes with -n / -p / --nested / -g
+       so you can ask "extract every Spring-Core MANIFEST inside this
+       uberjar" with one command:
+
+     ~> findjar app.jar --nested -n MANIFEST.MF --explode ./out
+     # → ./out/app.jar/BOOT-INF/lib/spring-core-6.1.0.jar/META-INF/MANIFEST.MF
+     #   ./out/app.jar/BOOT-INF/lib/jackson-core-2.16.1.jar/META-INF/MANIFEST.MF
+     #   ...
+
+     ~> findjar ~/.m2 -t j --nested -g 'CVE-' --explode ./vuln-audit
+     # → ./vuln-audit/clojure-1.11.1.jar@.../something.txt
+     # only entries whose content matches 'CVE-' are written out.
+
+ 11d. Plain .gz support (-t g). A bare .gz file (rotated log, single-
+      file dump) is treated as a one-entry virtual archive; the inner
+      path is the basename minus '.gz':
+
+     ~> findjar /var/log -t g -g 'ERROR'
+     /var/log/access.log.gz@access.log:42  ERROR 2026-05-12 oom-killed worker
+
  12. Symbolic links are NOT followed by default (a common cause of
      runaway scans). Pass -L to follow:
 
@@ -213,18 +281,31 @@ Examples:
 
      ~> findjar / --max-depth 3 -n '*.cfg'
 
- 14. Case-insensitive matching: -f i applies the regex CASE_INSENSITIVE
-     flag to every pattern. Other flags: m s u x d:
+ 14. Case-insensitive matching: -i (universal grep shortcut) or
+     -f i. Other regex flags via -f: m s u x d:
 
+     ~> findjar ~/.m2 -g "rich hickey" -i -t j
      ~> findjar ~/.m2 -g "rich hickey" -fi -t j
+     ~> findjar . -g "(?m)^class" -fm        # multiline mode
 
- 15. JSON output — one object per line (jsonl), suitable for piping
-     into jq, grep, or for editor / LLM integrations:
+ 15. JSON output — one object per line (jsonl, also surfaced as
+     --output ndjson). Suitable for piping into jq, grep, editor /
+     LLM integrations. Use --output json-array if your jq pipeline
+     would rather consume a single top-level array:
 
      ~> findjar . -g "TODO" --output json
 
      {"kind":"grep","path":"src/foo.clj","line":42,"hit?":true,"text":"  ;; TODO ..."}
      {"kind":"grep","path":"src/bar.clj","line":17,"hit?":true,"text":"  ;; TODO ..."}
+
+     ~> findjar . -g "TODO" --output json-array | jq 'group_by(.path)'
+
+     SARIF 2.1.0 output for GitHub Code Scanning + similar pipelines.
+     Duplicate-class collisions are level=error, warnings are
+     level=warning, plain matches are level=note:
+
+     ~> findjar ~/.m2 -t j --nested --duplicate-classes --output sarif > findjar.sarif
+     ~> findjar . --find-by-hash sha1:da39a3ee... --output sarif
 
      a) Count TODOs per file:
 
@@ -255,6 +336,12 @@ Examples:
 
      ~> NO_COLOR=1 findjar . -g 'fn ' | less
      ~> findjar . -g 'fn ' -m | less
+
+ 18a. NUL-separated path output (-0 / --null) is xargs-safe even when
+      paths contain spaces, newlines, or quotes:
+
+     ~> findjar . -g "TODO" -l -0 | xargs -0 wc -l
+     ~> findjar ~/.m2 --find-by-hash sha1:abc... -0 | xargs -0 rm
 
  19. FORCE_COLOR forces ANSI passthrough even on a non-TTY stdout
      (pipe / redirect). Useful for piping into pagers that re-render

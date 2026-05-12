@@ -7,6 +7,63 @@ build numbers.
 
 ## Unreleased
 
+### Added
+
+- **`--duplicate-classes`** — classpath audit mode. Walks every
+  `.class` entry across the search roots (combine with `--nested`
+  for uberjars), groups by FQN, and reports every class that lives
+  in two or more jars with a sha1 per copy. The single most useful
+  diagnostic for "where does this `NoSuchMethodError` come from?"
+- **`--explode <dir>`** — extract every matched entry to disk,
+  preserving the archive layout (`@` separators become directory
+  boundaries). Composes with `-n` / `-p` / `--nested` / `-g`, so the
+  same flag covers "extract everything that matches" and "extract
+  everything that contains".
+- **`--output sarif`** — emit SARIF 2.1.0 for GitHub Code Scanning
+  and similar security pipelines. `--duplicate-classes` collisions
+  are `level=error`, warnings are `level=warning`, plain matches are
+  `level=note`.
+- **`--output ndjson` alias** + **`--output json-array`** — the
+  former is just `json` under a more familiar name; the latter
+  emits a single top-level JSON array (jq-friendly without `-s`).
+- **`-t g` (.gz support)** — bare `.gz` files (rotated logs,
+  single-file dumps) are treated as one-entry virtual archives with
+  the entry name = basename minus `.gz`. Multi-part `.tar.gz`
+  continues to route through the tar scanner.
+- **`--manifest-summary`** — filtered `MANIFEST.MF` dump: parse via
+  `java.util.jar.Manifest` and keep only a curated allow-list
+  (Main-Class, Implementation-*, Bundle-*, Class-Path, etc.). Cuts
+  the noise on a `findjar app.jar --manifest --nested` from pages
+  of build metadata to a one-page dependency audit.
+- **`--include-glob` / `--exclude-glob`** — glob filtering at the
+  filesystem-walk level. Globstar (`**`) matches across directory
+  segments; both flags are repeatable.
+- **`-i` / `--ignore-case`** — universal grep shortcut for `-f i`.
+- **`-0` / `--null`** — NUL-separated path output for `xargs -0`.
+- **`--stats`** — one-line scan summary on stderr
+  (`examined N path(s), emitted M hit(s) in T.TTs`).
+- **`--why-skipped <path>`** — diagnostic that walks the filter
+  chain and reports the first rule that excluded the given path.
+- **`--unordered`** — in parallel mode, let workers emit results as
+  soon as they find them instead of buffering for in-order replay.
+  Critical for `findjar … | head` on huge corpora.
+- **`--recipes`** — workflow-oriented cookbook (12 worked examples)
+  embedded in the binary; also lives at `doc/RECIPES.md`.
+- **GitHub repo topics** for SEO: `jar`, `zip`, `tar`, `grep`,
+  `cli`, `clojure`, `graalvm`, `classpath`, `jvm`, `maven`,
+  `archive`, `search-tool`.
+
+### Quality
+
+- **Property tests** for `compile-glob`, `split-at-idxs`,
+  `unknown-flag-chars` via `test.check`.
+- **Bench harness** (`clj -M:bench`) with criterium against the hot
+  paths (`compile-glob`, `match-idxs`, `perform-scan`).
+- **JSON streaming flush** — every JSON record flushes `*out*` so
+  consumers piping through `jq --unbuffered` see real-time output.
+- **Defensive tests** for ZIP entries with `@` in the name or a
+  leading `/`.
+
 ### Breaking
 
 - **Exit codes are now grep-compatible**: `0` if at least one match was

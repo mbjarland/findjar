@@ -34,10 +34,13 @@ Filtering:
                                  Combine any of: i (case-insensitive), m 
                                  (multiline), s (dotall), u (unicode-case), x 
                                  (comments), d (unix-lines).
-  -t, --types <n|j|z|t>          restrict file types: n - normal files, j - 
+  -i, --ignore-case              shortcut for adding 'i' to --flags 
+                                 (case-insensitive match)
+  -t, --types <n|j|z|t|g>        restrict file types: n - normal files, j - 
                                  files in jar files, z - files in zip files, 
-                                 t - files in tar / tar.gz / tgz archives. 
-                                 Default: nj
+                                 t - files in tar / tar.gz / tgz archives, g 
+                                 - contents of .gz files (e.g. rotated log 
+                                 files). Default: nj
 
 Action:
   -c, --cat                      print the entire contents of matching files 
@@ -45,6 +48,11 @@ Action:
       --manifest                 for each matched .jar/.zip, print its 
                                  META-INF/MANIFEST.MF (and any 
                                  pom.properties). Implies -t j.
+      --manifest-summary         like --manifest but parses MANIFEST.MF via 
+                                 java.util.jar.Manifest and emits only the 
+                                 curated attributes most users care about 
+                                 (Main-Class, Implementation-*, Bundle-*, 
+                                 Class-Path, etc.)
       --class-info               for each matched .class entry, print class 
                                  name, super, interfaces, and method 
                                  signatures (parsed via ASM)
@@ -60,8 +68,18 @@ Action:
                                  several.
       --find-by-hash <algo:hex>  find every file whose hash equals <hex>, 
                                  e.g. sha1:da39a3ee.... Repeatable.
-  -q, --quiet                    suppress all output. Exit status 0 if any 
-                                 match was found, 1 otherwise
+      --explode <dir>            extract every matched entry to <dir>, 
+                                 preserving archive layout (@ becomes /). 
+                                 Combine with --nested, -g, -n, etc. Existing 
+                                 files are overwritten.
+      --duplicate-classes        after scanning, list every fully-qualified 
+                                 class name found in two or more jars (with 
+                                 the sha1 of each copy so you can see which 
+                                 is which). Combine with --nested for 
+                                 uberjars.
+  -q, --quiet                    suppress all output. Exit status is always 
+                                 grep-compatible: 0 if any match was emitted, 
+                                 1 if not, 2 on bad args
 
 Output:
   -x, --context <#>              with -g, show <#> lines of symmetric context 
@@ -70,11 +88,17 @@ Output:
                                  each match
   -B, --before <#>               with -g, show <#> lines of context before 
                                  each match
-      --output <fmt>             output format: text (default) or json
+      --output <fmt>             output format: text (default), json/ndjson 
+                                 (one JSON object per line, the JSON Lines 
+                                 format), json-array (single top-level JSON 
+                                 array), or sarif (SARIF 2.1.0 for GitHub 
+                                 Code Scanning and similar pipelines)
   -o, --out-file <path>          with -c, append output to file instead of 
                                  stdout
   -m, --monochrome               disable ANSI coloring of matches (NO_COLOR 
                                  env var also honored)
+  -0, --null                     terminate path-listing output with NUL 
+                                 instead of newline (for xargs -0)
 
 Scanning:
       --all                      traverse every directory. By default findjar 
@@ -89,6 +113,13 @@ Scanning:
       --exclude <name>           skip directories with this name 
                                  (repeatable). Adds to the default exclude 
                                  list.
+      --include-glob <pattern>   only scan paths (relative to search-root) 
+                                 matching this glob. Repeatable; ANY-match. 
+                                 Globstar (**) matches across directories.
+      --exclude-glob <pattern>   skip paths (relative to search-root) 
+                                 matching this glob. Repeatable; any match 
+                                 excludes. Globstar (**) matches across 
+                                 directories.
       --no-gitignore             do not honor .gitignore files in 
                                  search-roots
       --text                     with -g, do not skip files that look binary 
@@ -97,17 +128,32 @@ Scanning:
                                  using ~ cores+2 workers)
       --parallel-jobs <n>        cap the number of concurrent scan workers. 
                                  Useful on HDD or networked filesystems.
+      --unordered                in parallel mode, let workers emit results 
+                                 as soon as they find them instead of holding 
+                                 output back to match filesystem order. Good 
+                                 for 'findjar ... | head' on huge corpora; 
+                                 bad when downstream tools need stable 
+                                 ordering.
       --nested                   recurse into jars/zips that appear as 
                                  entries inside other jars/zips. Path takes 
                                  the form outer.jar@inner.jar@entry.
 
 Misc:
+      --stats                    after the scan, print a one-line summary 
+                                 (archives + entries + hits + elapsed) to 
+                                 stderr
+      --why-skipped <path>       explain why <path> would not be scanned 
+                                 given the other flags, then exit. Diagnostic 
+                                 for 'why isn't my file matching?'
       --examples                 print usage examples and exit
+      --recipes                  print the workflow-oriented recipe cookbook 
+                                 and exit (longer than --examples; pipe to 
+                                 less)
       --completions <shell>      print shell completion script 
                                  (zsh|bash|fish) and exit
       --profile                  enable tufte profiling (developer)
   -V, --version                  print version and exit
   -h, --help                     show this help and exit
 
-findjar 1.0.148 - 15c88ea - 2026.05.09 16:26:39 +
+findjar 1.0.173 - 63a491e - 2026.05.12 15:50:46
 
