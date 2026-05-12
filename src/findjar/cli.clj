@@ -270,6 +270,9 @@
       :id :why-skipped
       :parse-fn identity]
      [nil "--examples"  "print usage examples and exit"]
+     [nil "--recipes"
+      "print the workflow-oriented recipe cookbook and exit (longer than --examples; pipe to less)"
+      :id :recipes]
      [nil "--completions <shell>"
       "print shell completion script (zsh|bash|fish) and exit"
       :id :completions
@@ -289,7 +292,7 @@
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
    ["Scanning"   [:all :follow :max-depth :exclude :include-globs :exclude-globs
                   :no-gitignore :text :no-parallel :parallel-jobs :unordered :nested]]
-   ["Misc"       [:stats :why-skipped :examples :completions :profile :version :help]]])
+   ["Misc"       [:stats :why-skipped :examples :recipes :completions :profile :version :help]]])
 
 (defn- load-resource
   "Slurp a packaged text resource. Used for help / examples text so cli.clj
@@ -356,6 +359,13 @@
        str/split-lines
        (map #(colorize opts %))
        (str/join \newline)))
+
+(defn recipes
+  "Render the packaged recipes cookbook (workflow-oriented examples).
+  Markdown source is embedded as-is — recipes are richer than --examples
+  and intended to be read with a pager."
+  [_opts]
+  (load-resource "findjar/recipes.txt"))
 
 (defn error-msg
   "Render a display string for one or more errors. The errors come first so
@@ -430,6 +440,9 @@
 
       (:examples options)
       {:exit-message (examples options) :ok? true}
+
+      (:recipes options)
+      {:exit-message (recipes options) :ok? true}
 
       (:completions options)
       ;; Each script lives at resources/findjar/completions/<shell>.

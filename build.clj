@@ -47,9 +47,20 @@
 
 (b/git-count-revs nil)
 
+(defn- sync-recipes []
+  ;; doc/RECIPES.md is the source of truth; resources/findjar/recipes.txt
+  ;; is the embedded copy that ships in the binary for `findjar --recipes`.
+  ;; Mirror one to the other at build time so they cannot drift.
+  (let [src (jio/file "doc/RECIPES.md")
+        dst (jio/file "resources/findjar/recipes.txt")]
+    (when (.exists src)
+      (log "syncing" (.getPath src) "->" (.getPath dst))
+      (jio/copy src dst))))
+
 (defn uber [_]
   (clean nil)
   (gen-version-file nil)
+  (sync-recipes)
   (log "copying src, resources, and gen-resources")
   (b/copy-dir {:src-dirs   ["src" "resources" "gen-resources"]
                :target-dir class-dir})

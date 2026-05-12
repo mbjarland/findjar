@@ -379,6 +379,7 @@ any directory already on your zsh `$fpath`.
 |---|---|
 | [`doc/HELP.txt`](doc/HELP.txt) | flag reference, grouped by category (snapshot of `findjar --help`) |
 | [`doc/EXAMPLES.txt`](doc/EXAMPLES.txt) | worked examples for every feature (snapshot of `findjar --examples`) |
+| [`doc/RECIPES.md`](doc/RECIPES.md) | workflow-oriented cookbook (12 worked use cases — also `findjar --recipes`) |
 | [`man/findjar.1`](man/findjar.1) | full man page (groff source; `man ./man/findjar.1` to render) |
 | [`CHANGELOG.md`](CHANGELOG.md) | what changed in each release |
 | [`doc/RELEASING.md`](doc/RELEASING.md) | build / release pipeline |
