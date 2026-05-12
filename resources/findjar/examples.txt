@@ -213,10 +213,12 @@ Examples:
 
      @|bold ~> findjar / --max-depth 3 -n '*.cfg'|@
 
- 14. Case-insensitive matching: -f i applies the regex CASE_INSENSITIVE
-     flag to every pattern. Other flags: m s u x d:
+ 14. Case-insensitive matching: -i (universal grep shortcut) or
+     -f i. Other regex flags via -f: m s u x d:
 
+     @|bold ~> findjar ~/.m2 -g "rich hickey" -i -t j|@
      @|bold ~> findjar ~/.m2 -g "rich hickey" -fi -t j|@
+     @|bold ~> findjar . -g "(?m)^class" -fm|@        # multiline mode
 
  15. JSON output — one object per line (jsonl), suitable for piping
      into jq, grep, or for editor / LLM integrations:

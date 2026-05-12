@@ -71,6 +71,17 @@ emit lines that do NOT match the pattern.
 .BI \-f " flags" ", " \-\-flags " flags"
 Apply the given Pattern flag chars (i, m, s, u, x, d) to every regex.
 .TP
+.BR \-i ", " \-\-ignore\-case
+Shortcut for adding
+.I i
+to
+.BR \-\-flags ;
+the universal grep convention.\& Composes with
+.BR \-f :
+.B \-i \-f m
+is equivalent to
+.BR "\-f im" .
+.TP
 .BI \-t " types" ", " \-\-types " types"
 Restrict file types: n (normal files), j (entries in jars), z (entries in zips), t (entries in .tar / .tar.gz / .tgz archives).\& Default: nj.
 

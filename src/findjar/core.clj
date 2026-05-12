@@ -92,16 +92,21 @@
 
 (defn munge-regexes
   "Apply the user-supplied regex flags (string of single-char flags) to all
-  pattern opts in opts."
+  pattern opts in opts. -i / --ignore-case is the same as adding 'i' to
+  the flag string, and merges in so '-i -f m' acts like '-f im'."
   [opts]
-  (if-let [flags (not-empty (:flags opts))]
-    (reduce (fn [acc k]
-              (if-let [^Pattern v (get acc k)]
-                (assoc acc k (compile-with-flags v flags))
-                acc))
-            opts
-            [:name :grep :path :apath])
-    opts))
+  (let [flags (cond-> (or (:flags opts) "")
+                (and (:ignore-case opts)
+                     (not (str/includes? (or (:flags opts) "") "i")))
+                (str "i"))]
+    (if (empty? flags)
+      opts
+      (reduce (fn [acc k]
+                (if-let [^Pattern v (get acc k)]
+                  (assoc acc k (compile-with-flags v flags))
+                  acc))
+              opts
+              [:name :grep :path :apath]))))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Grep — sliding-window context

@@ -61,6 +61,16 @@
   (testing "case-insensitive flag actually matches case-insensitively"
     (let [opts (c/munge-regexes {:flags "i" :name #"FOO"})]
       (is (re-find (:name opts) "foobar"))))
+  (testing "-i / :ignore-case behaves like -f i"
+    (let [opts (c/munge-regexes {:ignore-case true :name #"FOO"})]
+      (is (re-find (:name opts) "foobar"))))
+  (testing "-i composes with -f m without doubling the i"
+    (let [opts (c/munge-regexes {:ignore-case true :flags "m" :name #"FOO"})]
+      (is (re-find (:name opts) "FOOBAR"))
+      (is (re-find (:name opts) "foobar"))))
+  (testing "-i with already-present 'i' in flags is idempotent"
+    (let [opts (c/munge-regexes {:ignore-case true :flags "i" :name #"FOO"})]
+      (is (re-find (:name opts) "foobar"))))
   (testing "non-pattern keys untouched"
     (let [opts (c/munge-regexes {:flags "i" :context 3 :name #"a"})]
       (is (= 3 (:context opts))))))

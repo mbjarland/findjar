@@ -136,6 +136,9 @@
       "regex flags applied to every pattern. Combine any of: i (case-insensitive), m (multiline), s (dotall), u (unicode-case), x (comments), d (unix-lines)."
       :validate [#(empty? (c/unknown-flag-chars %))
                  "must be a combination of i, m, s, u, x, d"]]
+     ["-i" "--ignore-case"
+      "shortcut for adding 'i' to --flags (case-insensitive match)"
+      :id :ignore-case]
      ["-t" (str "--types <" (file-type-selectors) ">")
       (str "restrict file types: " (file-type-descriptions) ". Default: "
            (str/join (map first (default-file-types))))
@@ -251,7 +254,7 @@
 ;; heading; ids must match the auto-derived ids in cli-options above.
 
 (def option-groups
-  [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :types]]
+  [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :ignore-case :types]]
    ["Action"     [:cat :manifest :class-info :files-only :count :max-count
                   :hash :find-by-hash :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
