@@ -539,6 +539,63 @@
       (is (= serial-paths parallel-paths)))))
 
 ;; ----------------------------------------------------------------------------
+;; Directory entries inside an archive must NOT contribute to action output
+;; (hashing, cat, grep, find-by-hash, class-info, manifest). They were
+;; previously hashed, producing da39a3ee... (sha1 of empty) for every
+;; META-INF/, BOOT-INF/, etc.
+
+(defn- write-jar-with-dir-entries! [^File f]
+  (jio/make-parents f)
+  (with-open [zos (java.util.zip.ZipOutputStream. (jio/output-stream f))]
+    ;; Explicit directory entries (trailing slash) — the bug surface.
+    (.putNextEntry zos (java.util.zip.ZipEntry. "META-INF/"))
+    (.closeEntry zos)
+    (.putNextEntry zos (java.util.zip.ZipEntry. "BOOT-INF/lib/"))
+    (.closeEntry zos)
+    ;; A real file entry alongside.
+    (.putNextEntry zos (java.util.zip.ZipEntry. "META-INF/MANIFEST.MF"))
+    (let [b (.getBytes "Manifest-Version: 1.0\n" "UTF-8")]
+      (.write zos b 0 (alength b)))
+    (.closeEntry zos)))
+
+(deftest directory-entries-not-hashed
+  (let [tmp ^File (-> (Files/createTempDirectory "findjar-dirtest-"
+                        (into-array FileAttribute []))
+                      (.toFile))]
+    (try
+      (let [jar (jio/file tmp "with-dirs.jar")]
+        (write-jar-with-dir-entries! jar))
+      (let [out  (ro/recording-output)
+            opts {:types #{:default "jar"} :hash [:sha1]}]
+        (c/perform-scan tmp out raw-cat opts)
+        (let [hash-paths (set (map #(nth % 1)
+                                   (filter #(= :hash (first %))
+                                           (ro/calls-of out))))]
+          (testing "no directory entry receives a hash row"
+            (is (not (some #(.endsWith ^String % "/") hash-paths))
+                (str "got hash rows for: " hash-paths)))
+          (testing "the file entry still gets hashed"
+            (is (some #(.endsWith ^String % "MANIFEST.MF") hash-paths)))))
+      (finally (fix/delete-recursively! tmp)))))
+
+(deftest directory-entries-still-listed-in-path-mode
+  (let [tmp ^File (-> (Files/createTempDirectory "findjar-dirlist-"
+                        (into-array FileAttribute []))
+                      (.toFile))]
+    (try
+      (let [jar (jio/file tmp "with-dirs.jar")]
+        (write-jar-with-dir-entries! jar))
+      (let [out  (ro/recording-output)
+            opts {:types #{:default "jar"}}]
+        (c/perform-scan tmp out raw-cat opts)
+        (let [paths (set (ro/paths-of out :match))]
+          (testing "directory entries appear in default path-list mode"
+            (is (some #(re-find #"META-INF/$" %) paths)))
+          (testing "file entries also appear"
+            (is (some #(re-find #"MANIFEST\.MF$" %) paths)))))
+      (finally (fix/delete-recursively! tmp)))))
+
+;; ----------------------------------------------------------------------------
 ;; Worker exception is contained as a warn, doesn't kill the scan.
 
 (deftest parallel-worker-exception-becomes-warn

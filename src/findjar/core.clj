@@ -370,11 +370,25 @@
         hash-types  (:hash opts)
         find-hash   (:find-by-hash opts)
         text?       (:text opts)
-        macro-op    (or cat? hash-types find-hash class-info? manifest?)]
+        macro-op    (or cat? hash-types find-hash class-info? manifest?)
+        ;; ZIP / JAR directory entries are named with a trailing '/'.
+        ;; They have no content — hashing them produces the sha1 of
+        ;; the empty stream (da39a3ee... ) for every directory, which
+        ;; is noise; cat / grep / class-info / manifest / find-by-hash
+        ;; are similarly meaningless. Keep them visible only in the
+        ;; default path-listing mode (where the directory entry's path
+        ;; is itself useful information).
+        dir?        (.endsWith ^String file-path "/")]
     (cond
       (and name-pat  (not (re-find name-pat  file-name))) nil
       (and path-pat  (not (re-find path-pat  file-path))) nil
       (and apath-pat (not (re-find apath-pat file-path))) nil
+
+      ;; Directory entries: only meaningful in the default path-list mode.
+      ;; Skip every action; emit the path when no action is in effect.
+      dir?
+      (when-not (or macro-op grep-pat)
+        (p/match output file-path opts))
 
       ;; --class-info: parse .class entries, ignore other entries silently.
       class-info?
