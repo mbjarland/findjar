@@ -202,6 +202,9 @@
       :parse-fn jio/as-file]
      ["-m" "--monochrome"
       "disable ANSI coloring of matches (NO_COLOR env var also honored)"]
+     ["-0" "--null"
+      "terminate path-listing output with NUL instead of newline (for xargs -0)"
+      :id :null]
 
      [nil "--all"
       "traverse every directory. By default findjar skips .git, .svn, .hg, node_modules, target, build, .gradle, .cpcache, .idea, .vscode, plus any paths matched by .gitignore at each search-root."]
@@ -251,7 +254,7 @@
   [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :types]]
    ["Action"     [:cat :manifest :class-info :files-only :count :max-count
                   :hash :find-by-hash :quiet]]
-   ["Output"     [:context :after :before :output :out-file :monochrome]]
+   ["Output"     [:context :after :before :output :out-file :monochrome :null]]
    ["Scanning"   [:all :follow :max-depth :exclude :no-gitignore :text
                   :no-parallel :parallel-jobs :nested]]
    ["Misc"       [:examples :completions :profile :version :help]]])

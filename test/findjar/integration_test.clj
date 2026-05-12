@@ -8,6 +8,7 @@
             [findjar.core :as c]
             [findjar.main :as main]
             [findjar.output.buffering :as buf]
+            [findjar.protocols :as p]
             [findjar.recording-output :as ro]
             [findjar.render :as r]
             [findjar.test-fixtures :as fix])
@@ -544,11 +545,41 @@
 (defn- run-main
   "Drive findjar.main/main-entrypoint with stdout / stderr suppressed,
   returning the exit code. hard-exit? = false so System/exit is never
-  called and the function just returns the code."
+  called and the function just returns the code.
+
+  Uses System/setOut so jansi.install!'s rebind of *out* (which fires
+  inside main-entrypoint) still lands somewhere we control."
   [& args]
-  (binding [*out* (java.io.StringWriter.)
-            *err* (java.io.StringWriter.)]
-    (main/main-entrypoint false args)))
+  (let [orig-out System/out
+        orig-err System/err
+        bos-out  (java.io.ByteArrayOutputStream.)
+        bos-err  (java.io.ByteArrayOutputStream.)]
+    (try
+      (System/setOut (java.io.PrintStream. bos-out true "UTF-8"))
+      (System/setErr (java.io.PrintStream. bos-err true "UTF-8"))
+      (main/main-entrypoint false args)
+      (finally
+        (System/setOut orig-out)
+        (System/setErr orig-err)))))
+
+(defn- run-main-capture
+  "Like run-main but returns {:exit :stdout :stderr}."
+  [& args]
+  (let [orig-out System/out
+        orig-err System/err
+        bos-out  (java.io.ByteArrayOutputStream.)
+        bos-err  (java.io.ByteArrayOutputStream.)]
+    (try
+      (System/setOut (java.io.PrintStream. bos-out true "UTF-8"))
+      (System/setErr (java.io.PrintStream. bos-err true "UTF-8"))
+      (let [code (main/main-entrypoint false args)]
+        (.flush *out*)
+        {:exit   code
+         :stdout (.toString bos-out "UTF-8")
+         :stderr (.toString bos-err "UTF-8")})
+      (finally
+        (System/setOut orig-out)
+        (System/setErr orig-err)))))
 
 (deftest exit-code-0-when-match-found
   (is (= 0 (run-main (.getPath *root*) "-n" "alpha.txt"))))
@@ -567,6 +598,28 @@
 (deftest exit-code-0-on-help-flag
   ;; --help is informational, exit 0
   (is (= 0 (run-main "--help"))))
+
+(deftest null-terminator-separates-paths-with-nul
+  ;; Unit-level: drive default-output's match method directly with *out*
+  ;; bound. End-to-end capture is harder because ansi/install! (called
+  ;; inside main-entrypoint) rebinds *out* after the test sets it.
+  (let [out (#'main/default-output)
+        sw  (java.io.StringWriter.)]
+    (binding [*out* sw]
+      (p/match out "path/one.txt" {:null true})
+      (p/match out "path/two.txt" {:null true}))
+    (testing "paths are NUL-terminated, no newlines"
+      (is (= (str "path/one.txt" (char 0) "path/two.txt" (char 0))
+             (str sw))))))
+
+(deftest null-default-still-uses-newlines
+  (let [out (#'main/default-output)
+        sw  (java.io.StringWriter.)]
+    (binding [*out* sw]
+      (p/match out "path/one.txt" {})
+      (p/match out "path/two.txt" {}))
+    (testing "without :null, output uses newlines"
+      (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
 (deftest exit-code-quiet-mode-is-grep-compatible
   ;; -q just suppresses output; exit code is the same as without -q.

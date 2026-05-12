@@ -31,8 +31,12 @@
           (let [^Throwable t ex]
             (.printStackTrace t (java.io.PrintWriter. ^java.io.Writer *err*))))))
 
-    (match [_ path _opts]
-      (println path))
+    (match [_ path opts]
+      ;; --null / -0 swaps newline for NUL so paths with embedded
+      ;; whitespace / quotes survive 'xargs -0'.
+      (if (:null opts)
+        (do (print (str path \u0000)) (.flush *out*))
+        (println path)))
 
     (grep-match [_ max-line-# line-map opts]
       (binding [r/*use-colors* (r/use-colors? opts)]

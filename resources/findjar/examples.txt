@@ -256,6 +256,12 @@ Examples:
      @|bold ~> NO_COLOR=1 findjar . -g 'fn ' | less|@
      @|bold ~> findjar . -g 'fn ' -m | less|@
 
+ 18a. NUL-separated path output (-0 / --null) is xargs-safe even when
+      paths contain spaces, newlines, or quotes:
+
+     @|bold ~> findjar . -g "TODO" -l -0 | xargs -0 wc -l|@
+     @|bold ~> findjar ~/.m2 --find-by-hash sha1:abc... -0 | xargs -0 rm|@
+
  19. FORCE_COLOR forces ANSI passthrough even on a non-TTY stdout
      (pipe / redirect). Useful for piping into pagers that re-render
      escapes, or for tools that capture colored output:

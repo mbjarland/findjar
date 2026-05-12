@@ -167,6 +167,14 @@ instead of stdout.
 Disable ANSI coloring of matches.\& The
 .B NO_COLOR
 environment variable also disables coloring.
+.TP
+.BR \-0 ", " \-\-null
+In path-listing modes (default action and
+.BR \-l ),
+terminate each emitted path with a NUL byte instead of a newline.\&
+Pipes safely through
+.B xargs \-0
+even when paths contain spaces, quotes, or embedded newlines.
 
 .SS Scanning
 .TP
