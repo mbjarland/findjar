@@ -152,6 +152,9 @@
      [nil "--manifest"
       "for each matched .jar/.zip, print its META-INF/MANIFEST.MF (and any pom.properties). Implies -t j."
       :id :manifest]
+     [nil "--manifest-summary"
+      "like --manifest but parses MANIFEST.MF via java.util.jar.Manifest and emits only the curated attributes most users care about (Main-Class, Implementation-*, Bundle-*, Class-Path, etc.)"
+      :id :manifest-summary]
      [nil "--class-info"
       "for each matched .class entry, print class name, super, interfaces, and method signatures (parsed via ASM)"
       :id :class-info]
@@ -271,7 +274,7 @@
 
 (def option-groups
   [["Filtering"  [:name :path :apath :glob :grep :word :invert :flags :ignore-case :types]]
-   ["Action"     [:cat :manifest :class-info :files-only :count :max-count
+   ["Action"     [:cat :manifest :manifest-summary :class-info :files-only :count :max-count
                   :hash :find-by-hash :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
    ["Scanning"   [:all :follow :max-depth :exclude :include-globs :exclude-globs

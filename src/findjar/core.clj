@@ -341,6 +341,58 @@
       (= file-path "MANIFEST.MF")
       (.endsWith file-path "pom.properties")))
 
+(def manifest-summary-keys
+  "Curated allow-list of MANIFEST.MF attributes most users actually care
+  about. --manifest-summary filters the full manifest down to this set
+  so the output of `findjar app.jar --manifest-summary --nested` reads
+  like a one-line-per-dependency summary instead of pages of build
+  metadata."
+  #{"Main-Class"
+    "Premain-Class" "Agent-Class"
+    "Implementation-Title" "Implementation-Version" "Implementation-Vendor"
+    "Specification-Title" "Specification-Version" "Specification-Vendor"
+    "Bundle-Name" "Bundle-SymbolicName" "Bundle-Version" "Bundle-Description"
+    "Created-By" "Built-By" "Build-Jdk" "Build-Date" "Build-Time"
+    "Class-Path"
+    "Automatic-Module-Name"})
+
+(defn- handle-manifest-summary
+  "Like --manifest --cat but filtered: parses MANIFEST.MF via
+  java.util.jar.Manifest and keeps only manifest-summary-keys; passes
+  pom.properties through verbatim (they're already a 3-line summary)."
+  [output opts file-path stream-factory]
+  (cond
+    (or (.endsWith ^String file-path "/MANIFEST.MF")
+        (.endsWith ^String file-path "@MANIFEST.MF")
+        (= ^String file-path "MANIFEST.MF"))
+    (try
+      (with-open [is (stream-factory)]
+        (let [mf    (java.util.jar.Manifest. is)
+              attrs (.getMainAttributes mf)
+              rows  (->> attrs
+                         (keep (fn [[k v]]
+                                 (let [ks (str k)]
+                                   (when (contains? manifest-summary-keys ks)
+                                     [ks (str v)]))))
+                         (sort-by first))]
+          (when (seq rows)
+            (let [block (str/join \newline
+                          (concat [(str "<<<<<<< " file-path)]
+                                  (for [[k v] rows]
+                                    (str "  " k ": " v))
+                                  [">>>>>>>" ""]))]
+              (p/dump-stream output file-path block opts)))))
+      (catch Exception e
+        (p/warn output
+                (str "manifest-summary parse failed on " file-path
+                     " - " (.getMessage e))
+                e opts)))
+
+    (.endsWith ^String file-path "pom.properties")
+    ;; pom.properties is already a 3-line summary; pass through with the
+    ;; existing cat renderer if --manifest-summary is also catting them.
+    nil))
+
 (defn- handle-find-by-hash
   "If --find-by-hash specs are set, hash the file and emit a :match for
   every spec that matches. Returns true if find-by-hash was attempted (i.e.
@@ -371,11 +423,12 @@
         cat?        (:cat opts)
         class-info? (:class-info opts)
         manifest?   (:manifest opts)
+        manifest-s? (:manifest-summary opts)
         files-only? (:files-only opts)
         hash-types  (:hash opts)
         find-hash   (:find-by-hash opts)
         text?       (:text opts)
-        macro-op    (or cat? hash-types find-hash class-info? manifest?)
+        macro-op    (or cat? hash-types find-hash class-info? manifest? manifest-s?)
         ;; ZIP / JAR directory entries are named with a trailing '/'.
         ;; They have no content — hashing them produces the sha1 of
         ;; the empty stream (da39a3ee... ) for every directory, which
@@ -407,6 +460,14 @@
       (when (manifest-entry? file-path)
         (when-let [s (render-cat output file-path stream-factory opts)]
           (p/dump-stream output file-path s opts)))
+
+      ;; --manifest-summary: like --manifest but filters MANIFEST.MF
+      ;; through java.util.jar.Manifest and keeps only the curated
+      ;; manifest-summary-keys set. Useful for auditing dependency
+      ;; metadata across an uberjar without drowning in build logs.
+      manifest-s?
+      (when (manifest-entry? file-path)
+        (handle-manifest-summary output opts file-path stream-factory))
 
       ;; --find-by-hash short-circuits everything else: hash and emit on match.
       find-hash (handle-find-by-hash output opts file-path stream-factory find-hash)

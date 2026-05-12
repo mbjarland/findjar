@@ -184,6 +184,23 @@ Examples:
      @|bold ~> findjar ~/.m2 --nested --manifest -g log4j -l|@
      # → list every fat jar that bundles a log4j-derived dependency
 
+     For uberjars where each bundled MANIFEST.MF is 40 lines of build
+     metadata, --manifest-summary filters down to a curated set of
+     attributes (Main-Class, Implementation-*, Bundle-*, Class-Path,
+     Created-By, ...):
+
+     @|bold ~> findjar app.jar --nested --manifest-summary|@
+
+     <<<<<<< app.jar@META-INF/MANIFEST.MF
+       Main-Class: com.example.Main
+       Implementation-Version: 4.2.1
+     >>>>>>>
+     <<<<<<< app.jar@BOOT-INF/lib/spring-core-6.1.0.jar@META-INF/MANIFEST.MF
+       Bundle-Name: Spring Core
+       Bundle-SymbolicName: org.springframework.core
+       Bundle-Version: 6.1.0
+     >>>>>>>
+
  11b. --class-info parses .class entries via ASM and prints their
       structure. Combine with -t j --nested to crawl uberjars and
       see what each class implements:

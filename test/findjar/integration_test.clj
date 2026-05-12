@@ -622,6 +622,23 @@
       (is (= "path/one.txt\npath/two.txt\n" (str sw))))))
 
 ;; ----------------------------------------------------------------------------
+;; --manifest-summary: filtered MANIFEST.MF dump.
+
+(deftest manifest-summary-keeps-allow-listed-keys-only
+  ;; The fixture's lib.jar manifest has Manifest-Version, Created-By,
+  ;; Main-Class. Of those, Created-By and Main-Class are in the
+  ;; summary allow-list; Manifest-Version is not.
+  (let [out  (run {:manifest-summary true :types #{"jar"}})
+        rows (filter #(= :dump (first %)) (ro/calls-of out))
+        text (some #(nth % 2) rows)]
+    (is (some? text) "expected a manifest-summary dump")
+    (testing "allow-listed keys are kept"
+      (is (re-find #"Created-By" text))
+      (is (re-find #"Main-Class" text)))
+    (testing "non-allow-listed keys are filtered out"
+      (is (not (re-find #"Manifest-Version" text))))))
+
+;; ----------------------------------------------------------------------------
 ;; .gz log-file support (--types g)
 
 (deftest gz-scanner-treats-file-as-single-entry-archive

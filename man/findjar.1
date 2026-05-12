@@ -98,6 +98,16 @@ or
 print its contents.\& Convenient one-step replacement for
 .IR "findjar app.jar -t j -p MANIFEST -c" .
 .TP
+.B \-\-manifest\-summary
+Like
+.B \-\-manifest
+but parses each MANIFEST.MF via java.util.jar.Manifest and keeps only
+a curated allow-list of attributes most users care about (Main-Class,
+Implementation-*, Bundle-*, Class-Path, Created-By, Built-By, etc.).\&
+pom.properties entries are skipped (they are already a 3-line summary).\&
+Useful for auditing what a fat jar bundles without paging through build
+metadata.
+.TP
 .B \-\-class-info
 For each matched .class entry, parse via ASM and print the class
 name, access modifiers, super, implemented interfaces, and method
