@@ -299,6 +299,17 @@ Scan files serially.\& Default is parallel using ~ cores+2 workers.
 .BI \-\-parallel\-jobs " n"
 Cap the number of concurrent scan workers.\& Useful on HDD or networked filesystems.
 .TP
+.B \-\-unordered
+In parallel mode, let workers emit results as they find them instead
+of holding back each file's output until earlier files finish.\&
+Critical for
+.RB ` "findjar ... | head" `
+on a huge corpus — without
+.BR \-\-unordered ,
+worker N's output is buffered until workers 1..N-1 complete, so the
+first match in the LAST file scanned is delayed.\& Output order is no
+longer stable when this flag is set.
+.TP
 .B \-\-nested
 Recurse into jars/zips that appear as entries inside other jars/zips.\& Path takes the form
 .IR outer.jar@inner.jar@entry .

@@ -255,6 +255,9 @@
       :id :parallel-jobs
       :parse-fn #(Integer/parseInt %)
       :validate [pos? "must be a positive integer"]]
+     [nil "--unordered"
+      "in parallel mode, let workers emit results as soon as they find them instead of holding output back to match filesystem order. Good for 'findjar ... | head' on huge corpora; bad when downstream tools need stable ordering."
+      :id :unordered]
      [nil "--nested"
       "recurse into jars/zips that appear as entries inside other jars/zips. Path takes the form outer.jar@inner.jar@entry."
       :id :nested]
@@ -285,7 +288,7 @@
                   :hash :find-by-hash :explode :duplicate-classes :quiet]]
    ["Output"     [:context :after :before :output :out-file :monochrome :null]]
    ["Scanning"   [:all :follow :max-depth :exclude :include-globs :exclude-globs
-                  :no-gitignore :text :no-parallel :parallel-jobs :nested]]
+                  :no-gitignore :text :no-parallel :parallel-jobs :unordered :nested]]
    ["Misc"       [:stats :why-skipped :examples :completions :profile :version :help]]])
 
 (defn- load-resource

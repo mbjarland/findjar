@@ -827,6 +827,21 @@
   (is (= 1 (run-main (.getPath *root*) "-n" "nope-not-here" "-q"))))
 
 ;; ----------------------------------------------------------------------------
+;; --unordered parallel scan.
+
+(deftest unordered-parallel-emits-same-match-set
+  ;; --unordered may reorder rows but must emit the same SET of matches
+  ;; as the ordered path.
+  (let [a (run-parallel {})
+        b (let [out (ro/recording-output)
+                opts {:types #{:default "jar"} :unordered true}]
+            (buf/parallel-scan *root* out raw-cat opts)
+            out)
+        paths-of-output #(set (ro/paths-of % :match))]
+    (is (= (paths-of-output a) (paths-of-output b))
+        "--unordered must not change the set of emitted matches")))
+
+;; ----------------------------------------------------------------------------
 ;; Defensive tests for unusual archive entry names. ZIP allows '@' inside
 ;; entry names; findjar's archive@entry path scheme uses '@' as a
 ;; separator so multiple @'s are possible. Leading-slash entries are also

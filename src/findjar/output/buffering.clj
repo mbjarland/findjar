@@ -101,19 +101,56 @@
                 t opts)))
     (buffer-calls b)))
 
-(defn parallel-scan
-  "Like core/perform-scan but parallelises file scanning. Each file is
-  scanned into its own Buffer; recorded calls are replayed in input order
-  against the real output. Worker output never interleaves, per-file
-  ordering is preserved, and exceptions in a worker become warnings rather
-  than killing the scan.
+(defn- synchronized-output
+  "Wrap a FindJarOutput so concurrent worker threads don't interleave
+  their emissions. Used by parallel-scan in --unordered mode where
+  workers write directly to the real output instead of through a
+  per-file Buffer."
+  [delegate]
+  (let [lock (Object.)]
+    (reify p/FindJarOutput
+      (warn            [_ m e o]   (locking lock (p/warn            delegate m e o)))
+      (match           [_ p o]     (locking lock (p/match           delegate p o)))
+      (grep-match      [_ mx m o]  (locking lock (p/grep-match      delegate mx m o)))
+      (grep-count      [_ p n o]   (locking lock (p/grep-count      delegate p n o)))
+      (class-info      [_ p i o]   (locking lock (p/class-info      delegate p i o)))
+      (dump-stream     [_ p s o]   (locking lock (p/dump-stream     delegate p s o)))
+      (print-hash      [_ p t v o] (locking lock (p/print-hash      delegate p t v o)))
+      (duplicate-class [_ f os o]  (locking lock (p/duplicate-class delegate f os o))))))
 
-  Parallelism is bounded by (:parallel-jobs opts), defaulting to whatever
-  pmap picks (cores+2)."
+(defn parallel-scan
+  "Like core/perform-scan but parallelises file scanning. Two modes:
+
+   ordered (default): each file is scanned into its own Buffer and
+   replayed in input order against the real output. Worker output never
+   interleaves, per-file ordering is preserved. Trade-off: output for
+   file N is held back until files 1..N-1 finish.
+
+   unordered (--unordered): workers emit directly to a sync-wrapped
+   real output. First match shows up as soon as ANY worker finds it
+   (great for 'findjar ... | head' on huge corpora) but output order
+   no longer matches filesystem order.
+
+  Parallelism is bounded by (:parallel-jobs opts), defaulting to
+  whatever pmap picks (cores+2). Exceptions in a worker become warnings
+  rather than killing the scan."
   [search-root real-output render-cat opts]
   (let [opts    (c/munge-regexes opts)
         to-path (c/path-fn search-root opts)
         files   (c/candidate-files search-root opts)
         n       (:parallel-jobs opts)]
-    (doseq [calls (pmap-n n #(scan-into-buffer render-cat opts to-path %) files)]
-      (replay! calls real-output))))
+    (if (:unordered opts)
+      (let [sync-out (synchronized-output real-output)]
+        (doseq [_ (pmap-n n
+                          (fn [^File f]
+                            (try
+                              (c/scan-file sync-out render-cat opts f (to-path f))
+                              (catch Throwable t
+                                (p/warn sync-out
+                                        (str "scanning " (.getPath f)
+                                             " - " (.getMessage t))
+                                        t opts))))
+                          files)]
+          nil))
+      (doseq [calls (pmap-n n #(scan-into-buffer render-cat opts to-path %) files)]
+        (replay! calls real-output)))))
